@@ -69,7 +69,8 @@ module.exports = {
           }
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-asset"
     ],
     web: {
       bundler: "metro",
