@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Asset } from "expo-asset";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/utils/useTheme";
+import { trackFakeCallActivation } from "@/services/analyticsService";
 
 const { width, height } = Dimensions.get("window");
 
@@ -86,9 +87,11 @@ export default function FakeCallScreen() {
     }
   };
 
-  const handleContactSelect = (contact) => {
+  const handleContactSelect = async (contact) => {
     setSelectedContact(contact);
     setInCall(true);
+    // Track fake call activation in analytics
+    await trackFakeCallActivation(contact.name);
   };
 
   const handleAccept = async () => {

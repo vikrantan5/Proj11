@@ -36,6 +36,7 @@ import { useTheme } from "@/utils/useTheme";
 import LoadingScreen from "@/components/LoadingScreen";
 import ActionButton from "@/components/ActionButton";
 import TopNavbar from "@/components/TopNavbar";
+import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { auth } from "@/config/firebaseConfig";
 import { getUserDetails } from "@/services/userService";
 import { getUserAlertCount } from "@/services/safetyAlertService";
@@ -52,6 +53,7 @@ export default function ProfileScreen() {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [alertsCount, setAlertsCount] = useState(0);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const theme = useTheme();
 
   const [fontsLoaded] = useFonts({
@@ -548,6 +550,21 @@ export default function ProfileScreen() {
               subtitle="Control data sharing and privacy"
               onPress={handlePrivacy}
             />
+
+            <View
+              style={{
+                height: 1,
+                backgroundColor: theme.colors.divider,
+                marginVertical: 8,
+              }}
+            />
+
+            <SettingItem
+              icon={Lock}
+              title="Change Password"
+              subtitle="Update your account password"
+              onPress={() => setShowPasswordModal(true)}
+            />
           </View>
         </View>
 
@@ -608,6 +625,12 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        visible={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+      />
     </View>
   );
 }

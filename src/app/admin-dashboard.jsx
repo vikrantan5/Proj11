@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Shield,
   Calendar,
+  Phone,
 } from 'lucide-react-native';
 import {
   useFonts,
@@ -51,6 +52,7 @@ export default function AdminDashboard() {
     totalUsers: 0,
     totalSOS: 0,
     totalAlarms: 0,
+    totalFakeCalls: 0,
     activeUsersToday: 0,
   });
   const [recentEvents, setRecentEvents] = useState([]);
@@ -113,6 +115,14 @@ export default function AdminDashboard() {
       const alarmSnapshot = await getCountFromServer(alarmQuery);
       const totalAlarms = alarmSnapshot.data().count;
 
+      // Total Fake Call activations
+      const fakeCallQuery = query(
+        collection(db, 'analytics_events'),
+        where('eventType', '==', 'FAKE_CALL_USED')
+      );
+      const fakeCallSnapshot = await getCountFromServer(fakeCallQuery);
+      const totalFakeCalls = fakeCallSnapshot.data().count;
+
       // Active users today (users who had activity today)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -131,6 +141,7 @@ export default function AdminDashboard() {
         totalUsers,
         totalSOS,
         totalAlarms,
+        totalFakeCalls,
         activeUsersToday,
       });
     } catch (error) {
@@ -442,6 +453,46 @@ export default function AdminDashboard() {
                   </Text>
                 </LinearGradient>
               </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+              {/* Total Fake Calls */}
+              <View style={{ flex: 1 }}>
+                <LinearGradient
+                  colors={['rgba(156, 39, 255, 0.2)', 'rgba(75, 200, 230, 0.1)']}
+                  style={{
+                    borderRadius: 16,
+                    padding: 20,
+                    borderWidth: 1,
+                    borderColor: theme.colors.borderLight,
+                  }}
+                >
+                  <Phone size={28} color={theme.colors.neonPurple} strokeWidth={2} />
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_700Bold',
+                      fontSize: 32,
+                      color: theme.colors.text,
+                      marginTop: 12,
+                    }}
+                  >
+                    {stats.totalFakeCalls}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_500Medium',
+                      fontSize: 13,
+                      color: theme.colors.textSecondary,
+                      marginTop: 4,
+                    }}
+                  >
+                    Fake Calls
+                  </Text>
+                </LinearGradient>
+              </View>
+
+              {/* Empty placeholder */}
+              <View style={{ flex: 1 }} />
             </View>
           </View>
 

@@ -60,8 +60,14 @@ export default function LoginScreen() {
         // User hasn't filled details, redirect to user details screen
         router.replace('/(auth)/user-details');
       } else {
-        // User has completed profile, go to home
-        router.replace('/(tabs)');
+        // Check if user is admin
+        if (userDetails.isAdmin === true) {
+          // Admin user - redirect to admin dashboard
+          router.replace('/admin-dashboard');
+        } else {
+          // Regular user - go to home
+          router.replace('/(tabs)');
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
