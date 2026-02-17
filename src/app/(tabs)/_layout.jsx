@@ -1,21 +1,55 @@
 
-import { Tabs } from "expo-router";
+import { Tabs, useFocusEffect } from "expo-router";
 import { Home, MapPin, User, Shield } from "lucide-react-native";
 import { useTheme } from "@/utils/useTheme";
 import { View } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { isAdmin } from "@/utils/adminUtils";
+import { auth, db } from "@/config/firebaseConfig";
+import { doc, onSnapshot } from "firebase/firestore";
 
 export default function TabLayout() {
   const theme = useTheme();
   const [userIsAdmin, setUserIsAdmin] = useState(false);
 
+  // Check admin status on mount
   useEffect(() => {
     checkAdminStatus();
   }, []);
 
+  // Set up real-time listener for admin status changes
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    console.log('Setting up admin status listener for user:', user.uid);
+
+    // Listen to changes in the user document
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userRef, (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const userData = docSnapshot.data();
+        const isAdminUser = userData.isAdmin === true;
+        console.log('Admin status updated:', isAdminUser);
+        setUserIsAdmin(isAdminUser);
+      }
+    }, (error) => {
+      console.error('Error listening to admin status:', error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Re-check admin status whenever the profile tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      checkAdminStatus();
+    }, [])
+  );
+
   const checkAdminStatus = async () => {
     const adminStatus = await isAdmin();
+    console.log('Manual admin check:', adminStatus);
     setUserIsAdmin(adminStatus);
   };
 
@@ -33,7 +67,7 @@ export default function TabLayout() {
           position: 'absolute',
           borderRadius: 24,
           marginHorizontal: 16,
-          marginBottom: 35,
+          marginBottom: 15,
           shadowColor: theme.colors.shadowColor,
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.3,

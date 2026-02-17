@@ -36,10 +36,10 @@ import { useTheme } from "@/utils/useTheme";
 import LoadingScreen from "@/components/LoadingScreen";
 import ActionButton from "@/components/ActionButton";
 import TopNavbar from "@/components/TopNavbar";
-import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { auth } from "@/config/firebaseConfig";
 import { getUserDetails } from "@/services/userService";
 import { getUserAlertCount } from "@/services/safetyAlertService";
+import { isAdmin } from "@/utils/adminUtils";
 import { signOut } from "firebase/auth";
 import { router } from "expo-router";
 import { useFocusEffect } from "expo-router";
@@ -53,7 +53,7 @@ export default function ProfileScreen() {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [alertsCount, setAlertsCount] = useState(0);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [isUserAdmin, setIsUserAdmin] = useState(false);
   const theme = useTheme();
 
   const [fontsLoaded] = useFonts({
@@ -64,17 +64,29 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     loadUserData();
+    checkAdminStatus();
   }, []);
 
-  // Refresh alert count when screen is focused
+  // Refresh admin status when screen is focused
   useFocusEffect(
     React.useCallback(() => {
+      checkAdminStatus();
       const user = auth.currentUser;
       if (user) {
         loadAlertCount(user.uid);
       }
     }, [])
   );
+
+  const checkAdminStatus = async () => {
+    try {
+      const adminStatus = await isAdmin();
+      console.log('Profile: Admin status checked:', adminStatus);
+      setIsUserAdmin(adminStatus);
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+    }
+  };
 
   const loadAlertCount = async (userId) => {
     try {
@@ -499,6 +511,69 @@ export default function ProfileScreen() {
               padding: 16,
             }}
           >
+            {/* Admin Dashboard Button - Only shown to admins */}
+            {isUserAdmin && (
+              <>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    marginHorizontal: -16,
+                    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                    borderRadius: 8,
+                  }}
+                  onPress={() => router.push("/admin-dashboard")}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: 'rgba(255, 215, 0, 0.2)',
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    <Shield size={16} color="#FFD700" strokeWidth={2} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontFamily: "Inter_600SemiBold",
+                        fontSize: 16,
+                        color: '#FFD700',
+                        marginBottom: 2,
+                      }}
+                    >
+                      Admin Dashboard
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 12,
+                        color: theme.colors.textSecondary,
+                      }}
+                    >
+                      View analytics and manage users
+                    </Text>
+                  </View>
+                  <ChevronRight size={16} color="#FFD700" strokeWidth={2} />
+                </TouchableOpacity>
+
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: theme.colors.divider,
+                    marginVertical: 8,
+                  }}
+                />
+              </>
+            )}
+
             <SettingItem
               icon={Heart}
               title="Emergency Contacts"
@@ -549,21 +624,6 @@ export default function ProfileScreen() {
               title="Privacy & Security"
               subtitle="Control data sharing and privacy"
               onPress={handlePrivacy}
-            />
-
-            <View
-              style={{
-                height: 1,
-                backgroundColor: theme.colors.divider,
-                marginVertical: 8,
-              }}
-            />
-
-            <SettingItem
-              icon={Lock}
-              title="Change Password"
-              subtitle="Update your account password"
-              onPress={() => setShowPasswordModal(true)}
             />
           </View>
         </View>
@@ -625,12 +685,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Change Password Modal */}
-      <ChangePasswordModal
-        visible={showPasswordModal}
-        onClose={() => setShowPasswordModal(false)}
-      />
     </View>
   );
 }

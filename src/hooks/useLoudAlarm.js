@@ -30,7 +30,7 @@ export const useLoudAlarm = () => {
 
       // ✅ Temp sound - pehle ye use kar
       const { sound } = await Audio.Sound.createAsync(
-        require('../app/assets/audio'), // Is file ko check kar
+        require('../../assets/audio/alarm.mp3'), // Is file ko check kar
         { shouldPlay: false, isLooping: true, volume: 1.0 }
       );
 

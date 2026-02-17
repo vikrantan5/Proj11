@@ -16,24 +16,84 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Asset } from "expo-asset";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/utils/useTheme";
-import { trackFakeCallActivation } from "@/services/analyticsService";
+import { auth } from "@/config/firebaseConfig";
+import { getUserDetails } from "@/services/userService";
 
 const { width, height } = Dimensions.get("window");
-
-const FAKE_CONTACTS = [
-  { id: '1', name: 'Mom', phone: '+1 (555) 123-4567', color: '#9C27FF' },
-  { id: '2', name: 'Dad', phone: '+1 (555) 234-5678', color: '#FF2D95' },
-  { id: '3', name: 'Best Friend', phone: '+1 (555) 345-6789', color: '#00E5FF' },
-  { id: '4', name: 'Work', phone: '+1 (555) 456-7890', color: '#00E5A0' },
-];
 
 export default function FakeCallScreen() {
   const [sound, setSound] = useState(null);
   const [pulseAnim] = useState(new Animated.Value(1));
   const [selectedContact, setSelectedContact] = useState(null);
   const [inCall, setInCall] = useState(false);
+  const [contacts, setContacts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+
+  // Load user's emergency contacts on mount
+  useEffect(() => {
+    loadUserContacts();
+  }, []);
+
+  const loadUserContacts = async () => {
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        const userDetails = await getUserDetails(user.uid);
+        
+        // Build contacts list from user's emergency contacts
+        const fakeContacts = [];
+        
+        if (userDetails?.emergencyContacts && Array.isArray(userDetails.emergencyContacts)) {
+          // Use real emergency contacts
+          userDetails.emergencyContacts.forEach((contact, index) => {
+            if (contact.name && contact.phone) {
+              fakeContacts.push({
+                id: `contact-${index}`,
+                name: contact.name,
+                phone: contact.phone,
+                color: getContactColor(index),
+              });
+            }
+          });
+        }
+        
+        // If no emergency contacts, use user's own name and a generic contact
+        if (fakeContacts.length === 0) {
+          fakeContacts.push({
+            id: '1',
+            name: userDetails?.name || 'Mom',
+            phone: '+1 (555) 123-4567',
+            color: '#9C27FF',
+          });
+          fakeContacts.push({
+            id: '2',
+            name: 'Best Friend',
+            phone: '+1 (555) 345-6789',
+            color: '#00E5FF',
+          });
+        }
+        
+        setContacts(fakeContacts);
+      }
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+      // Fallback to default contacts
+      setContacts([
+        { id: '1', name: 'Mom', phone: '+1 (555) 123-4567', color: '#9C27FF' },
+        { id: '2', name: 'Dad', phone: '+1 (555) 234-5678', color: '#FF2D95' },
+        { id: '3', name: 'Best Friend', phone: '+1 (555) 345-6789', color: '#00E5FF' },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getContactColor = (index) => {
+    const colors = ['#9C27FF', '#FF2D95', '#00E5FF', '#00E5A0', '#FFD700', '#FF6B6B'];
+    return colors[index % colors.length];
+  };
 
   useEffect(() => {
     if (inCall) {
@@ -87,11 +147,9 @@ export default function FakeCallScreen() {
     }
   };
 
-  const handleContactSelect = async (contact) => {
+  const handleContactSelect = (contact) => {
     setSelectedContact(contact);
     setInCall(true);
-    // Track fake call activation in analytics
-    await trackFakeCallActivation(contact.name);
   };
 
   const handleAccept = async () => {
@@ -100,7 +158,14 @@ export default function FakeCallScreen() {
       await sound.stopAsync();
       await sound.unloadAsync();
     }
-    router.replace("/in-call");
+    // Pass selected contact to in-call screen
+    router.replace({
+      pathname: "/in-call",
+      params: { 
+        contactName: selectedContact.name,
+        contactPhone: selectedContact.phone,
+      }
+    });
   };
 
   const handleDecline = async () => {
@@ -263,7 +328,7 @@ export default function FakeCallScreen() {
         </View>
 
         <FlatList
-          data={FAKE_CONTACTS}
+          data={contacts}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ gap: 16 }}

@@ -7,16 +7,23 @@ import {
   Dimensions,
   Animated,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { PhoneOff, Mic, MicOff, Volume2, User } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useTheme } from "@/utils/useTheme";
 
 const { width, height } = Dimensions.get("window");
 
 export default function InCallScreen() {
+  const theme = useTheme();
+  const params = useLocalSearchParams();
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [pulseAnim] = useState(new Animated.Value(1));
+  
+  // Get contact info from params or use defaults
+  const contactName = params.contactName || 'Mom';
+  const contactPhone = params.contactPhone || '+1 (555) 123-4567';
 
   useEffect(() => {
     // Start call timer
@@ -59,7 +66,7 @@ export default function InCallScreen() {
 
   return (
     <LinearGradient
-      colors={["#1a1a2e", "#16213e", "#0f3460"]}
+      colors={theme.colors.backgroundGradient}
       style={styles.container}
     >
       {/* Call Status Indicator */}
@@ -70,22 +77,25 @@ export default function InCallScreen() {
             { transform: [{ scale: pulseAnim }] },
           ]}
         />
-        <Text style={styles.statusText}>Call in Progress</Text>
+        <Text style={[styles.statusText, { color: theme.colors.safe }]}>Call in Progress</Text>
       </View>
 
       {/* Caller Info Section */}
       <View style={styles.callerSection}>
         <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
+          <LinearGradient
+            colors={[theme.colors.neonPurple, theme.colors.neonCyan]}
+            style={styles.avatar}
+          >
             <User size={100} color="#FFFFFF" strokeWidth={1.5} />
-          </View>
+          </LinearGradient>
         </View>
 
-        <Text style={styles.callerName}>Mom</Text>
-        <Text style={styles.callerNumber}>+1 (555) 123-4567</Text>
+        <Text style={[styles.callerName, { color: theme.colors.text }]}>{contactName}</Text>
+        <Text style={[styles.callerNumber, { color: theme.colors.textSecondary }]}>{contactPhone}</Text>
         
-        <View style={styles.durationContainer}>
-          <Text style={styles.durationText}>{formatDuration(callDuration)}</Text>
+        <View style={[styles.durationContainer, { backgroundColor: 'rgba(0, 229, 255, 0.2)' }]}>
+          <Text style={[styles.durationText, { color: theme.colors.neonCyan }]}>{formatDuration(callDuration)}</Text>
         </View>
       </View>
 
@@ -99,19 +109,20 @@ export default function InCallScreen() {
             activeOpacity={0.8}
             data-testid="mute-button"
           >
-            <View
+            <LinearGradient
+              colors={isMuted ? ['rgba(255, 45, 149, 0.3)', 'rgba(156, 39, 255, 0.2)'] : ['rgba(0, 229, 255, 0.2)', 'rgba(156, 39, 255, 0.1)']}
               style={[
                 styles.actionButtonInner,
-                isMuted && styles.actionButtonActive,
+                isMuted && { borderWidth: 2, borderColor: theme.colors.neonPink },
               ]}
             >
               {isMuted ? (
-                <MicOff size={28} color="#FFFFFF" strokeWidth={2} />
+                <MicOff size={28} color={theme.colors.neonPink} strokeWidth={2} />
               ) : (
-                <Mic size={28} color="#FFFFFF" strokeWidth={2} />
+                <Mic size={28} color={theme.colors.neonCyan} strokeWidth={2} />
               )}
-            </View>
-            <Text style={styles.actionLabel}>
+            </LinearGradient>
+            <Text style={[styles.actionLabel, { color: theme.colors.text }]}>
               {isMuted ? "Unmute" : "Mute"}
             </Text>
           </TouchableOpacity>
@@ -123,10 +134,13 @@ export default function InCallScreen() {
             activeOpacity={0.8}
             data-testid="speaker-button"
           >
-            <View style={styles.actionButtonInner}>
-              <Volume2 size={28} color="#FFFFFF" strokeWidth={2} />
-            </View>
-            <Text style={styles.actionLabel}>Speaker</Text>
+            <LinearGradient
+              colors={['rgba(0, 229, 255, 0.2)', 'rgba(156, 39, 255, 0.1)']}
+              style={styles.actionButtonInner}
+            >
+              <Volume2 size={28} color={theme.colors.neonCyan} strokeWidth={2} />
+            </LinearGradient>
+            <Text style={[styles.actionLabel, { color: theme.colors.text }]}>Speaker</Text>
           </TouchableOpacity>
         </View>
 
@@ -137,17 +151,20 @@ export default function InCallScreen() {
           activeOpacity={0.8}
           data-testid="end-call-button"
         >
-          <View style={styles.endCallInner}>
+          <LinearGradient
+            colors={['#FF4757', '#FF2D95']}
+            style={styles.endCallInner}
+          >
             <PhoneOff size={32} color="#FFFFFF" strokeWidth={2.5} />
-          </View>
+          </LinearGradient>
           <Text style={styles.endCallText}>End Call</Text>
         </TouchableOpacity>
       </View>
 
       {/* Additional Info */}
       <View style={styles.infoSection}>
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
+        <View style={[styles.infoBox, { backgroundColor: 'rgba(0, 229, 255, 0.15)', borderColor: theme.colors.borderLight }]}>
+          <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
             📱 This is a simulated call to help you exit safely
           </Text>
         </View>
@@ -171,13 +188,17 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#22C55E",
+    backgroundColor: "#00E5A0",
     marginRight: 8,
+    shadowColor: '#00E5A0',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
   },
   statusText: {
     fontSize: 14,
-    color: "rgba(255, 255, 255, 0.8)",
-    fontWeight: "500",
+    fontWeight: "600",
+    letterSpacing: 1,
   },
   callerSection: {
     flex: 1,
@@ -192,34 +213,36 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 4,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderColor: "rgba(0, 229, 255, 0.4)",
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 15,
   },
   callerName: {
     fontSize: 40,
     fontWeight: "700",
-    color: "#FFFFFF",
     marginBottom: 8,
   },
   callerNumber: {
     fontSize: 18,
-    color: "rgba(255, 255, 255, 0.7)",
     marginBottom: 24,
   },
   durationContainer: {
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 229, 255, 0.3)',
   },
   durationText: {
     fontSize: 20,
-    color: "#FFFFFF",
-    fontWeight: "600",
-    letterSpacing: 2,
+    fontWeight: "700",
+    letterSpacing: 3,
   },
   actionsSection: {
     paddingBottom: 80,
@@ -238,18 +261,19 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 229, 255, 0.3)',
   },
   actionButtonActive: {
-    backgroundColor: "rgba(255, 255, 255, 0.35)",
+    backgroundColor: "rgba(255, 45, 149, 0.3)",
+    borderColor: '#FF2D95',
   },
   actionLabel: {
     fontSize: 13,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500",
+    fontWeight: "600",
   },
   endCallButton: {
     alignItems: "center",
@@ -258,15 +282,14 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: "#DC143C",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
-    shadowColor: "#DC143C",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowColor: "#FF2D95",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 12,
   },
   endCallText: {
     fontSize: 16,
@@ -280,16 +303,13 @@ const styles = StyleSheet.create({
     right: 24,
   },
   infoBox: {
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderWidth: 2,
   },
   infoText: {
     fontSize: 13,
-    color: "rgba(255, 255, 255, 0.9)",
     textAlign: "center",
     lineHeight: 18,
   },
