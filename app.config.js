@@ -99,8 +99,6 @@ module.exports = {
   razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET
 },
 
-    runtimeVersion: {
-      policy: "appVersion"
-    }
+    runtimeVersion: "1.0.0"
   }
 };
