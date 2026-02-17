@@ -2,7 +2,7 @@ require('dotenv').config();
 
 module.exports = {
   expo: {
-    owner: "vik4an5",
+    owner: "chachahehe",
     name: "Maitri",
     slug: "create-mobile-app",
     scheme: "createmobileapp",
@@ -79,26 +79,25 @@ module.exports = {
       typedRoutes: true
     },
     extra: {
-  eas: {
-    projectId: "e728f197-d8f0-4da7-a9c4-03c72e7fa42b"
-  },
-  router: {
-    origin: false
-  },
-
-  // Make environment variables available in the app
-  firebaseApiKey: process.env.FIREBASE_API_KEY,
-  firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
-  firebaseStorageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  firebaseAppId: process.env.FIREBASE_APP_ID,
-  firebaseMeasurementId: process.env.FIREBASE_MEASUREMENT_ID,
-  googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
-  razorpayKeyId: process.env.RAZORPAY_KEY_ID,
-  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET
-},
-
+      router: {
+        origin: false
+      },
+      // यहाँ EAS project ID ऐड की गई है
+      eas: {
+        projectId: "ddcaa347-9f3d-48dd-b010-c02657844e70"
+      },
+      // Make environment variables available in the app
+      firebaseApiKey: process.env.FIREBASE_API_KEY,
+      firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
+      firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
+      firebaseStorageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+      firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+      firebaseAppId: process.env.FIREBASE_APP_ID,
+      firebaseMeasurementId: process.env.FIREBASE_MEASUREMENT_ID,
+      googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+      razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET
+    },
     runtimeVersion: "1.0.0"
   }
 };
