@@ -2,6 +2,32 @@
   "name": "maitri",
   "main": "index",
   "version": "1.0.0",
+
+
+  "expo": {
+  "doctor": {
+    "reactNativeDirectoryCheck": {
+      "exclude": [
+        "react-native-razorpay",
+        "react-native-graph",
+        "crypto-js",
+        "expo-av",
+        "@uploadcare/upload-client",
+        "color2k",
+        "dotenv",
+        "expo-torch",
+        "firebase",
+        "papaparse",
+        "react-native-web-refresh-control",
+        "recharts",
+        "serialize-error",
+        "three"
+      ],
+      "listUnknownPackages": false
+    }
+  }
+},
+
   "scripts": {
     "postinstall": "patch-package",
     "start": "npx expo start --web",
