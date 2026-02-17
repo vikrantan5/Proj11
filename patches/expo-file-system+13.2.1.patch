@@ -1,0 +1,44 @@
+diff --git a/node_modules/expo-file-system/android/build.gradle b/node_modules/expo-file-system/android/build.gradle
+index 9c85ed6..3b717b3 100644
+--- a/node_modules/expo-file-system/android/build.gradle
++++ b/node_modules/expo-file-system/android/build.gradle
+@@ -1,6 +1,6 @@
+ apply plugin: 'com.android.library'
+ apply plugin: 'kotlin-android'
+-apply plugin: 'maven'
++apply plugin: 'maven-publish'
+ 
+ group = 'host.exp.exponent'
+ version = '13.2.1'
+@@ -20,11 +20,6 @@ buildscript {
+   }
+ }
+ 
+-//Upload android library to maven with javadoc and android sources
+-configurations {
+-  deployerJars
+-}
+-
+ //Creating sources with comments
+ task androidSourcesJar(type: Jar) {
+   classifier = 'sources'
+@@ -36,11 +31,15 @@ artifacts {
+   archives androidSourcesJar
+ }
+ 
+-uploadArchives {
++publishing {
++  publications {
++    maven(MavenPublication) {
++      artifact androidSourcesJar
++    }
++  }
+   repositories {
+-    mavenDeployer {
+-      configuration = configurations.deployerJars
+-      repository(url: mavenLocal().url)
++    maven {
++      url = mavenLocal().url
+     }
+   }
+ }
