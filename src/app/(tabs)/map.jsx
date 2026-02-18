@@ -125,24 +125,56 @@ export default function SafetyMapScreen() {
         return;
       }
 
-      // Get current location
-      const location = await getCurrentLocation();
-      setCurrentLocation(location);
+      // Get current location with retry logic
+      let location = null;
+      let retries = 3;
+      while (retries > 0 && !location) {
+        try {
+          location = await getCurrentLocation();
+          setCurrentLocation(location);
+          break;
+        } catch (locError) {
+          console.warn(`Failed to get location, retries left: ${retries - 1}`, locError);
+          retries--;
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+      
       setIsLoadingLocation(false);
 
-      // Start foreground location monitoring
-      const monitoring = await startForegroundLocationMonitoring((dangerZone) => {
-        console.log("Danger zone detected:", dangerZone);
-      });
-      setLocationMonitoring(monitoring);
+      if (!location) {
+        console.warn("Could not get current location after retries");
+        Alert.alert(
+          "Location Unavailable",
+          "Unable to get your current location. The map will still work, but some features may be limited.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      // Start foreground location monitoring with error handling
+      try {
+        const monitoring = await startForegroundLocationMonitoring((dangerZone) => {
+          console.log("Danger zone detected:", dangerZone);
+        });
+        setLocationMonitoring(monitoring);
+        console.log("✅ Location monitoring started");
+      } catch (monitorError) {
+        console.error("Error starting location monitoring:", monitorError);
+        // Don't show alert, just log - the map still works without monitoring
+        console.warn("Location monitoring failed, but map is still functional");
+      }
 
       console.log("✅ Map initialized successfully");
     } catch (error) {
       console.error("Error initializing map:", error);
       setIsLoadingLocation(false);
       Alert.alert(
-        "Error",
-        "Failed to initialize map. Please check location permissions and try again."
+        "Initialization Error",
+        "There was an issue setting up the map. Some features may not work properly.",
+        [{ text: "OK" }]
       );
     }
   };

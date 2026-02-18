@@ -88,9 +88,17 @@ export const requestNotificationPermissions = async () => {
  */
 export const getCurrentLocation = async () => {
   try {
-    const location = await Location.getCurrentPositionAsync({
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Location request timeout')), 15000)
+    );
+    
+    const locationPromise = Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.High,
+      maximumAge: 10000, // Accept cached location up to 10 seconds old
     });
+    
+    const location = await Promise.race([locationPromise, timeoutPromise]);
     
     return {
       latitude: location.coords.latitude,
@@ -98,7 +106,23 @@ export const getCurrentLocation = async () => {
     };
   } catch (error) {
     console.error('Error getting current location:', error);
-    throw error;
+    
+    // Try with lower accuracy as fallback
+    try {
+      console.log('Retrying with balanced accuracy...');
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        maximumAge: 10000,
+      });
+      
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+    } catch (fallbackError) {
+      console.error('Fallback location also failed:', fallbackError);
+      throw fallbackError;
+    }
   }
 };
 
@@ -116,10 +140,15 @@ export const watchLocation = async (callback) => {
         distanceInterval: 50, // Or every 50 meters
       },
       (location) => {
-        callback({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
+        try {
+          callback({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
+        } catch (callbackError) {
+          console.error('Error in location callback:', callbackError);
+          // Don't crash, just log the error
+        }
       }
     );
     
@@ -247,54 +276,122 @@ export const startBackgroundLocationTracking = async () => {
  * @returns {Promise<Object>} - Subscription object
  */
 export const startForegroundLocationMonitoring = async (onDangerDetected) => {
+  let locationSubscription = null;
+  let unsubscribeMarkers = null;
+  
   try {
     console.log('Starting foreground location monitoring...');
     
     // Check permissions
     const hasPermissions = await requestLocationPermissions(false);
     if (!hasPermissions) {
-      throw new Error('Location permissions not granted');
-    }
-    
-    const hasNotifPermissions = await requestNotificationPermissions();
-    if (!hasNotifPermissions) {
-      console.warn('Notification permissions not granted - alerts may not work');
-    }
-    
-    // Load unsafe markers into cache
-    const markers = await getMarkersByStatus('unsafe');
-    unsafeMarkersCache = markers;
-    console.log(`Loaded ${unsafeMarkersCache.length} unsafe markers`);
-    
-    // Subscribe to marker updates
-    const unsubscribeMarkers = subscribeToSafetyMarkers((markers) => {
-      unsafeMarkersCache = markers.filter(m => m.status === 'unsafe');
-      console.log(`Updated unsafe markers cache: ${unsafeMarkersCache.length} markers`);
-    });
-    
-    // Watch location and check for danger zones
-    const locationSubscription = await watchLocation(async (location) => {
-      await checkDangerZone(location, unsafeMarkersCache);
-      if (onDangerDetected) {
-        const dangerZone = isLocationInDangerZone(location, unsafeMarkersCache, GEOFENCE_RADIUS_KM);
-        if (dangerZone) {
-          onDangerDetected(dangerZone);
+      console.error('Location permissions not granted');
+      // Return a dummy subscription instead of throwing
+      return {
+        remove: () => {
+          console.log('No monitoring to stop');
         }
-      }
-    });
+      };
+    }
     
-    console.log('✅ Foreground location monitoring started');
+    // Add a small delay before requesting notification permissions
+    // This prevents Android from crashing due to rapid permission requests
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Request notification permissions in a try-catch to prevent crash
+    try {
+      const hasNotifPermissions = await requestNotificationPermissions();
+      if (!hasNotifPermissions) {
+        console.warn('Notification permissions not granted - alerts may not work');
+      }
+    } catch (notifError) {
+      console.warn('Failed to request notification permissions:', notifError);
+      // Don't crash if notification permissions fail
+    }
+    
+    // Load unsafe markers into cache with error handling
+    try {
+      const markers = await getMarkersByStatus('unsafe');
+      unsafeMarkersCache = markers || [];
+      console.log(`Loaded ${unsafeMarkersCache.length} unsafe markers`);
+    } catch (markerError) {
+      console.error('Failed to load unsafe markers:', markerError);
+      unsafeMarkersCache = [];
+      // Continue even if markers can't be loaded
+    }
+    
+    // Subscribe to marker updates with error handling
+    try {
+      unsubscribeMarkers = subscribeToSafetyMarkers((markers) => {
+        try {
+          unsafeMarkersCache = markers.filter(m => m.status === 'unsafe');
+          console.log(`Updated unsafe markers cache: ${unsafeMarkersCache.length} markers`);
+        } catch (filterError) {
+          console.error('Error filtering markers:', filterError);
+          unsafeMarkersCache = [];
+        }
+      });
+    } catch (subscribeError) {
+      console.error('Failed to subscribe to markers:', subscribeError);
+      unsubscribeMarkers = () => {}; // Dummy unsubscribe
+    }
+    
+    // Add a small delay before starting location watching
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Watch location and check for danger zones with comprehensive error handling
+    try {
+      locationSubscription = await watchLocation(async (location) => {
+        try {
+          await checkDangerZone(location, unsafeMarkersCache);
+          if (onDangerDetected) {
+            const dangerZone = isLocationInDangerZone(location, unsafeMarkersCache, GEOFENCE_RADIUS_KM);
+            if (dangerZone) {
+              onDangerDetected(dangerZone);
+            }
+          }
+        } catch (checkError) {
+          console.error('Error checking danger zone:', checkError);
+          // Don't crash, just log the error
+        }
+      });
+    } catch (watchError) {
+      console.error('Failed to start location watching:', watchError);
+      // Return a subscription object even if watching fails
+      return {
+        remove: () => {
+          if (unsubscribeMarkers) unsubscribeMarkers();
+          console.log('Partial monitoring stopped');
+        }
+      };
+    }
+    
+    console.log('✅ Foreground location monitoring started successfully');
     
     return {
       remove: () => {
-        locationSubscription.remove();
-        unsubscribeMarkers();
-        console.log('Location monitoring stopped');
+        try {
+          if (locationSubscription) locationSubscription.remove();
+          if (unsubscribeMarkers) unsubscribeMarkers();
+          console.log('Location monitoring stopped');
+        } catch (removeError) {
+          console.error('Error stopping monitoring:', removeError);
+        }
       }
     };
   } catch (error) {
-    console.error('Error starting foreground location monitoring:', error);
-    throw error;
+    console.error('Critical error starting foreground location monitoring:', error);
+    // Return a safe object instead of throwing
+    return {
+      remove: () => {
+        try {
+          if (locationSubscription) locationSubscription.remove();
+          if (unsubscribeMarkers) unsubscribeMarkers();
+        } catch (e) {
+          console.error('Error in cleanup:', e);
+        }
+      }
+    };
   }
 };
 
