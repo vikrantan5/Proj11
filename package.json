@@ -2,32 +2,29 @@
   "name": "maitri",
   "main": "index",
   "version": "1.0.0",
-
-
   "expo": {
-  "doctor": {
-    "reactNativeDirectoryCheck": {
-      "exclude": [
-        "react-native-razorpay",
-        "react-native-graph",
-        "crypto-js",
-        "expo-av",
-        "@uploadcare/upload-client",
-        "color2k",
-        "dotenv",
-        "expo-torch",
-        "firebase",
-        "papaparse",
-        "react-native-web-refresh-control",
-        "recharts",
-        "serialize-error",
-        "three"
-      ],
-      "listUnknownPackages": false
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-razorpay",
+          "react-native-graph",
+          "crypto-js",
+          "expo-av",
+          "@uploadcare/upload-client",
+          "color2k",
+          "dotenv",
+          "expo-torch",
+          "firebase",
+          "papaparse",
+          "react-native-web-refresh-control",
+          "recharts",
+          "serialize-error",
+          "three"
+        ],
+        "listUnknownPackages": false
+      }
     }
-  }
-},
-
+  },
   "scripts": {
     "postinstall": "patch-package",
     "start": "npx expo start --web",
@@ -54,7 +51,7 @@
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
-    "expo": "~53.0.27",
+    "expo": "^54.0.33",
     "expo-asset": "~11.1.7",
     "expo-audio": "~0.4.9",
     "expo-av": "~15.1.7",

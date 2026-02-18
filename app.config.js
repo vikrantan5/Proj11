@@ -60,7 +60,6 @@ module.exports = {
           resizeMode: "contain"
         }
       ],
-      "expo-audio",
       [
         "expo-build-properties",
         {

@@ -3,7 +3,6 @@
 # dependencies
 node_modules/
 
-caches
 # Expo
 .expo/
 dist/
@@ -11,6 +10,7 @@ web-build/
 expo-env.d.ts
 
 # Native
+.kotlin/
 *.orig.*
 *.jks
 *.p8
@@ -38,7 +38,9 @@ yarn-error.*
 
 app-example
 
-.env
+.metro-cache
 
-.metro-virtual/*
+.env.production
 
+.metro-virtual/
+caches
