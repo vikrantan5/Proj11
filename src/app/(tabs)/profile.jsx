@@ -364,7 +364,7 @@ export default function ProfileScreen() {
                     textAlign: "center",
                   }}
                 >
-                  Emergency{"\n"}Contacts
+                  Emergency{"n"}Contacts
                 </Text>
               </View>
               <View style={{ alignItems: "center" }}>
@@ -386,7 +386,7 @@ export default function ProfileScreen() {
                     textAlign: "center",
                   }}
                 >
-                  Safety{"\n"}Alerts
+                  Safety{"n"}Alerts
                 </Text>
               </View>
             </View>
@@ -562,6 +562,66 @@ export default function ProfileScreen() {
                     </Text>
                   </View>
                   <ChevronRight size={16} color="#FFD700" strokeWidth={2} />
+                </TouchableOpacity>
+
+
+                
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: theme.colors.divider,
+                    marginVertical: 8,
+                  }}
+                />
+
+                <TouchableOpacity
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    marginHorizontal: -16,
+                    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+                    borderRadius: 8,
+                  }}
+                  onPress={() => router.push("/admin-videos")}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: 'rgba(0, 229, 255, 0.2)',
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    <Settings size={16} color={theme.colors.neonCyan} strokeWidth={2} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontFamily: "Inter_600SemiBold",
+                        fontSize: 16,
+                        color: theme.colors.neonCyan,
+                        marginBottom: 2,
+                      }}
+                    >
+                      Manage Videos
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 12,
+                        color: theme.colors.textSecondary,
+                      }}
+                    >
+                      Add and manage educational videos
+                    </Text>
+                  </View>
+                  <ChevronRight size={16} color={theme.colors.neonCyan} strokeWidth={2} />
                 </TouchableOpacity>
 
                 <View

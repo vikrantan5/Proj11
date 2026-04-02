@@ -1,6 +1,6 @@
 
 import { Tabs, useFocusEffect } from "expo-router";
-import { Home, MapPin, User, Shield } from "lucide-react-native";
+import { Home, MapPin, User, Shield, Video } from "lucide-react-native";
 import { useTheme } from "@/utils/useTheme";
 import { View } from "react-native";
 import { useState, useEffect, useCallback } from "react";
@@ -118,6 +118,24 @@ export default function TabLayout() {
               backgroundColor: focused ? 'rgba(0, 229, 255, 0.15)' : 'transparent',
             }}>
               <MapPin color={color} size={24} strokeWidth={focused ? 2.5 : 1.5} />
+            </View>
+          ),
+        }}
+      />
+          <Tabs.Screen
+        name="videos"
+        options={{
+          title: "Videos",
+          tabBarIcon: ({ color, size, focused }) => (
+            <View style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: focused ? 'rgba(0, 229, 255, 0.15)' : 'transparent',
+            }}>
+              <Video color={color} size={24} strokeWidth={focused ? 2.5 : 1.5} />
             </View>
           ),
         }}
