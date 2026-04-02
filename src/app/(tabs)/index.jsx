@@ -581,7 +581,7 @@ export default function HomeScreen() {
               </LinearGradient>
             </TouchableOpacity>
           </View>
-
+ 
           <View style={{ flexDirection: 'row', gap: 16 }}>
             {/* Emergency Contacts */}
             <TouchableOpacity
