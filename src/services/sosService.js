@@ -8,6 +8,7 @@ import { requestCameraPermission, getPhotoMetadata } from './cameraService';
 import { encryptData } from './encryptionService';
 import { startRecording, stopRecording } from './audioRecordingService';
 import { uploadAllSOSFiles, uploadSOSImageToCloudinary, uploadSOSAudioToCloudinary } from './cloudinaryService';
+import { saveSOSEventToFirestore, notifyBackend } from './sosEventService';
 
 // SOS recording duration in ms (10 seconds)
 const SOS_RECORDING_DURATION_MS = 10000;
@@ -386,10 +387,44 @@ export const triggerSOS = async (photoUri = null, onProgress = null) => {
         captured: !!audioUri,
         uploaded: !!audioUrl,
       },
-      photoCapture: photoUri ? { success: !!imageUrl, uri: photoUri } : { skipped: true },
+     photoCapture: photoUri ? { success: !!imageUrl, uri: photoUri } : { skipped: true },
       contactsCount: userDetails.emergencyContacts.length,
+      userName: userDetails.name || 'User',
       timestamp: new Date().toISOString(),
     };
+
+    // Step 9: Persist SOS event (non-blocking, in background)
+    try {
+      const persistPromises = [
+        saveSOSEventToFirestore(result).catch(err =>
+          console.error('Firestore SOS save failed:', err)
+        ),
+        notifyBackend({
+          user_id: currentUser.uid,
+          user_name: userDetails.name || 'User',
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+          location_url: result.locationUrl,
+          image_url: imageUrl,
+          audio_url: audioUrl,
+          emergency_contacts: userDetails.emergencyContacts,
+          contacts_notified: userDetails.emergencyContacts.length,
+          sms_success: smsResult.success,
+          call_success: callResult.success,
+          audio_recorded: !!audioUri,
+          photo_captured: !!photoUri,
+          success: result.success,
+        }).catch(err =>
+          console.error('Backend SOS notify failed:', err)
+        ),
+      ];
+      // Fire-and-forget persistence - don't block the SOS result
+      Promise.allSettled(persistPromises).then(results => {
+        console.log('SOS event persistence completed:', results.map(r => r.status));
+      });
+    } catch (persistError) {
+      console.error('Error initiating SOS persistence:', persistError);
+    }
 
     return result;
   } catch (error) {

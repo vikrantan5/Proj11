@@ -13,11 +13,13 @@ module.exports = {
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
-      infoPlist: {
+            infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationAlwaysAndWhenInUseUsageDescription: "Maitri needs your location to provide real-time safety monitoring and alerts when you enter unsafe areas.",
         NSLocationWhenInUseUsageDescription: "Maitri needs your location to show nearby safety information and provide safe route navigation.",
         NSLocationAlwaysUsageDescription: "Maitri needs background location access to send safety alerts even when the app is closed.",
+        NSCameraUsageDescription: "Maitri needs camera access to capture evidence photos during SOS emergencies.",
+        NSMicrophoneUsageDescription: "Maitri needs microphone access to record audio evidence during SOS emergencies.",
         UIBackgroundModes: ["location"]
       },
       config: {
@@ -29,14 +31,16 @@ module.exports = {
         foregroundImage: "./assets/images/adaptive-icon.jpg",
         backgroundColor: "#ffffff"
       },
-      permissions: [
+         permissions: [
+        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION"
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.SEND_SMS"
       ],
       package: "xyz.create.CreateExpoEnvironment",
       config: {
