@@ -108,25 +108,25 @@ export const sendEmergencySMS = async (contacts, location, imageUrl = null, audi
     }
 
     // Build comprehensive SOS message
-    let message = 'SOS ALERT - Emergency Detected';
-    message += `User: ${userName}`;
-
+    let message = 'SOS ALERT - Emergency Detected\n';
+    message += `User: ${userName}\n`;
+    
     if (location) {
       const locationLink = generateLocationLink(location.latitude, location.longitude);
-      message += `Location: ${locationLink}`;
+      message += `Location: ${locationLink}\n`;
     } else {
-      message += 'Location: Unavailable';
+      message += 'Location: Unavailable\n';
     }
 
     if (imageUrl) {
-      message += `Image Evidence: ${imageUrl}`;
+      message += `Image Evidence: ${imageUrl}\n`;
     }
 
     if (audioUrl) {
-      message += `Audio Evidence: ${audioUrl}`;
+      message += `Audio Evidence: ${audioUrl}\n`;
     }
 
-    message += `Time: ${new Date().toLocaleString()}`;
+    message += `Time: ${new Date().toLocaleString()}\n`;
     message += 'Please contact me immediately or call emergency services.';
 
     const { result } = await SMS.sendSMSAsync(phoneNumbers, message);
@@ -387,7 +387,7 @@ export const triggerSOS = async (photoUri = null, onProgress = null) => {
         captured: !!audioUri,
         uploaded: !!audioUrl,
       },
-     photoCapture: photoUri ? { success: !!imageUrl, uri: photoUri } : { skipped: true },
+      photoCapture: photoUri ? { success: !!imageUrl, uri: photoUri } : { skipped: true },
       contactsCount: userDetails.emergencyContacts.length,
       userName: userDetails.name || 'User',
       timestamp: new Date().toISOString(),
