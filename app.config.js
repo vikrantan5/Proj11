@@ -96,7 +96,11 @@ module.exports = {
       firebaseMeasurementId: process.env.FIREBASE_MEASUREMENT_ID,
       googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
       razorpayKeyId: process.env.RAZORPAY_KEY_ID,
-      razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET
+        razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET,
+      cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
+      cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
+      backendUrl: process.env.BACKEND_URL,
     },
     runtimeVersion: "1.0.0"
   }

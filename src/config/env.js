@@ -43,6 +43,15 @@ export const ENV = {
   // Razorpay Configuration
   RAZORPAY_KEY_ID: getEnvVar('razorpayKeyId') || process.env.RAZORPAY_KEY_ID,
   RAZORPAY_KEY_SECRET: getEnvVar('razorpayKeySecret') || process.env.RAZORPAY_KEY_SECRET,
+
+
+   // Cloudinary Configuration
+  CLOUDINARY_CLOUD_NAME: getEnvVar('cloudinaryCloudName') || process.env.CLOUDINARY_CLOUD_NAME,
+  CLOUDINARY_API_KEY: getEnvVar('cloudinaryApiKey') || process.env.CLOUDINARY_API_KEY,
+  CLOUDINARY_API_SECRET: getEnvVar('cloudinaryApiSecret') || process.env.CLOUDINARY_API_SECRET,
+  
+  // Backend URL
+  BACKEND_URL: getEnvVar('backendUrl') || process.env.BACKEND_URL,
 };
 
 export default ENV;

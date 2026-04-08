@@ -5,47 +5,51 @@ import { Alert } from 'react-native';
 import { getUserDetails } from './userService';
 import { getAuth } from 'firebase/auth';
 import { requestCameraPermission, getPhotoMetadata } from './cameraService';
-import { uploadSOSImage } from './storageService';
 import { encryptData } from './encryptionService';
+import { startRecording, stopRecording } from './audioRecordingService';
+import { uploadAllSOSFiles, uploadSOSImageToCloudinary, uploadSOSAudioToCloudinary } from './cloudinaryService';
+
+// SOS recording duration in ms (10 seconds)
+const SOS_RECORDING_DURATION_MS = 10000;
 
 /**
- * Request SMS, Location, and Camera permissions
- * @returns {Promise<Object>} Object with SMS, Location, and Camera permission status
+ * Request SMS, Location, Camera, and Microphone permissions
+ * @returns {Promise<Object>} Permission status for all
  */
 export const requestSOSPermissions = async () => {
   try {
-    // Request SMS permissions
-    const smsAvailable = await SMS.isAvailableAsync();
-    
-    // Request Location permissions
-    const { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
-    
-    // Request Camera permissions
-    const cameraGranted = await requestCameraPermission();
-    
+    const results = await Promise.allSettled([
+      SMS.isAvailableAsync(),
+      Location.requestForegroundPermissionsAsync(),
+      requestCameraPermission(),
+    ]);
+
+    const smsAvailable = results[0].status === 'fulfilled' ? results[0].value : false;
+    const locationGranted = results[1].status === 'fulfilled' ? results[1].value?.status === 'granted' : false;
+    const cameraGranted = results[2].status === 'fulfilled' ? results[2].value : false;
+
     return {
       smsAvailable,
-      locationGranted: locationStatus === 'granted',
-      cameraGranted
+      locationGranted,
+      cameraGranted,
     };
   } catch (error) {
     console.error('Error requesting SOS permissions:', error);
     return {
       smsAvailable: false,
       locationGranted: false,
-      cameraGranted: false
+      cameraGranted: false,
     };
   }
 };
 
 /**
- * Get current GPS location
- * @returns {Promise<Object|null>} Location object or null if failed
+ * Get current GPS location with high accuracy
+ * @returns {Promise<Object|null>}
  */
 export const getCurrentLocation = async () => {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
-    
     if (status !== 'granted') {
       console.log('Location permission not granted');
       return null;
@@ -68,38 +72,32 @@ export const getCurrentLocation = async () => {
 
 /**
  * Generate Google Maps link from coordinates
- * @param {number} latitude 
- * @param {number} longitude 
- * @returns {string} Google Maps URL
  */
 export const generateLocationLink = (latitude, longitude) => {
-  return `https://www.google.com/maps?q=${latitude},${longitude}`;
+  return `https://maps.google.com/?q=${latitude},${longitude}`;
 };
 
 /**
- * Send SMS to emergency contacts with image link
- * @param {Array} contacts - Array of phone numbers (strings) or objects with phone property
- * @param {Object} location - Location object with latitude and longitude
- * @param {string} imageUrl - Optional image URL to include in SMS
- * @returns {Promise<Object>} Result object with success status
+ * Send SMS to emergency contacts with all evidence links
+ * @param {Array} contacts - Emergency contacts
+ * @param {Object} location - Location with lat/lng
+ * @param {string} imageUrl - Cloudinary image URL
+ * @param {string} audioUrl - Cloudinary audio URL
+ * @param {string} userName - User's name
+ * @returns {Promise<Object>}
  */
-export const sendEmergencySMS = async (contacts, location, imageUrl = null) => {
+export const sendEmergencySMS = async (contacts, location, imageUrl = null, audioUrl = null, userName = 'User') => {
   try {
     const smsAvailable = await SMS.isAvailableAsync();
-    
     if (!smsAvailable) {
       throw new Error('SMS is not available on this device');
     }
 
-    // Extract phone numbers - contacts can be strings or objects
     let phoneNumbers = [];
     if (Array.isArray(contacts)) {
       phoneNumbers = contacts.map(contact => {
-        if (typeof contact === 'string') {
-          return contact;
-        } else if (contact.phone) {
-          return contact.phone;
-        }
+        if (typeof contact === 'string') return contact;
+        if (contact.phone) return contact.phone;
         return null;
       }).filter(phone => phone && phone.trim() !== '');
     }
@@ -108,34 +106,35 @@ export const sendEmergencySMS = async (contacts, location, imageUrl = null) => {
       throw new Error('No valid emergency contacts found');
     }
 
-    // Create emergency message
-    let message = '🚨 EMERGENCY ALERT 🚨\n\n';
-    message += 'This is an automated SOS message from Saheli app.\n';
-    message += 'I need immediate assistance!\n\n';
-    
+    // Build comprehensive SOS message
+    let message = 'SOS ALERT - Emergency Detected';
+    message += `User: ${userName}`;
+
     if (location) {
       const locationLink = generateLocationLink(location.latitude, location.longitude);
-      message += `My current location:\n${locationLink}\n\n`;
-      message += `Coordinates: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}\n`;
-      message += `Time: ${new Date().toLocaleString()}\n\n`;
+      message += `Location: ${locationLink}`;
     } else {
-      message += 'Location unavailable.\n\n';
+      message += 'Location: Unavailable';
     }
-    
+
     if (imageUrl) {
-      message += `📸 Evidence Photo:\n${imageUrl}\n\n`;
+      message += `Image Evidence: ${imageUrl}`;
     }
-    
+
+    if (audioUrl) {
+      message += `Audio Evidence: ${audioUrl}`;
+    }
+
+    message += `Time: ${new Date().toLocaleString()}`;
     message += 'Please contact me immediately or call emergency services.';
 
-    // Send SMS to all contacts
     const { result } = await SMS.sendSMSAsync(phoneNumbers, message);
 
     return {
       success: result === 'sent',
       sentTo: phoneNumbers.length,
-      message: result === 'sent' 
-        ? `Emergency alert sent to ${phoneNumbers.length} contact(s)` 
+      message: result === 'sent'
+        ? `Emergency alert sent to ${phoneNumbers.length} contact(s)`
         : 'SMS was not sent',
     };
   } catch (error) {
@@ -149,8 +148,6 @@ export const sendEmergencySMS = async (contacts, location, imageUrl = null) => {
 
 /**
  * Make emergency call to highest priority contact
- * @param {Array} contacts - Array of contact objects with priority
- * @returns {Promise<Object>} Result object
  */
 export const makeEmergencyCall = async (contacts) => {
   try {
@@ -158,20 +155,15 @@ export const makeEmergencyCall = async (contacts) => {
       throw new Error('No emergency contacts available');
     }
 
-    // Sort by priority (lower number = higher priority) and get highest priority contact
     let sortedContacts = [...contacts];
-    
-    // Handle both old format (strings) and new format (objects with priority)
     if (typeof sortedContacts[0] === 'object' && 'priority' in sortedContacts[0]) {
       sortedContacts.sort((a, b) => a.priority - b.priority);
     }
-    
+
     const priorityContact = sortedContacts[0];
-    
-    // Get phone number
     let phoneNumber;
     let contactName = 'emergency contact';
-    
+
     if (typeof priorityContact === 'string') {
       phoneNumber = priorityContact;
     } else {
@@ -183,26 +175,20 @@ export const makeEmergencyCall = async (contacts) => {
       throw new Error('Invalid phone number for priority contact');
     }
 
-    // Clean phone number (remove spaces, dashes, etc., keep only digits and +)
     phoneNumber = phoneNumber.replace(/[^0-9+]/g, '');
-
-    // Create tel URL
     const telUrl = `tel:${phoneNumber}`;
-
-    // Check if the device can open tel URLs
     const canOpen = await Linking.canOpenURL(telUrl);
 
     if (!canOpen) {
       throw new Error('Cannot make phone calls on this device');
     }
 
-    // Open dialer with the number
     await Linking.openURL(telUrl);
 
     return {
       success: true,
       message: `Calling ${contactName} (Priority Contact)`,
-      contactName: contactName,
+      contactName,
     };
   } catch (error) {
     console.error('Error making emergency call:', error);
@@ -214,91 +200,201 @@ export const makeEmergencyCall = async (contacts) => {
 };
 
 /**
- * Main SOS function - triggers all emergency protocols including camera capture
- * @param {string} photoUri - Optional photo URI (if captured from component)
- * @returns {Promise<Object>} Result object with all actions taken
+ * Create SOS payload for backend
  */
-export const triggerSOS = async (photoUri = null) => {
+export const createSOSPayload = (userData, location, imageUrl, audioUrl) => {
+  const timestamp = new Date().toISOString();
+  const locationUrl = location ? generateLocationLink(location.latitude, location.longitude) : null;
+
+  return {
+    user_id: userData.userId || 'unknown',
+    user_name: userData.name || 'Unknown',
+    latitude: location?.latitude || null,
+    longitude: location?.longitude || null,
+    location_url: locationUrl,
+    image_url: imageUrl,
+    audio_url: audioUrl,
+    emergency_contacts: userData.emergencyContacts || [],
+    timestamp,
+  };
+};
+
+/**
+ * MAIN SOS FUNCTION - Enhanced with audio recording + Cloudinary upload
+ * Performs all actions in parallel for maximum speed
+ *
+ * Flow:
+ * 1. Start audio recording immediately
+ * 2. Capture image (from component)
+ * 3. Get location
+ * 4. Wait for audio to finish (10s)
+ * 5. Upload files to Cloudinary in parallel
+ * 6. Send SMS with evidence links
+ * 7. Make emergency call
+ * 8. Notify backend
+ *
+ * @param {string|null} photoUri - Photo URI from camera component
+ * @param {Function} onProgress - Progress callback (optional)
+ * @returns {Promise<Object>} Complete SOS result
+ */
+export const triggerSOS = async (photoUri = null, onProgress = null) => {
+  const updateProgress = (step, status) => {
+    if (onProgress) {
+      onProgress({ step, status });
+    }
+  };
+
   try {
-    // Get current user
+    updateProgress('auth', 'checking');
+
+    // Step 1: Verify user authentication
     const auth = getAuth();
     const currentUser = auth.currentUser;
-
     if (!currentUser) {
       throw new Error('User not authenticated');
     }
 
-    // Get user details with emergency contacts
+    // Step 2: Get user details with emergency contacts
     const userDetails = await getUserDetails(currentUser.uid);
-
     if (!userDetails || !userDetails.emergencyContacts || userDetails.emergencyContacts.length === 0) {
       throw new Error('No emergency contacts found. Please add emergency contacts in your profile.');
     }
 
-    // Request permissions
-    const permissions = await requestSOSPermissions();
+    updateProgress('permissions', 'requesting');
 
-    // Get current location
-    let location = null;
-    if (permissions.locationGranted) {
-      location = await getCurrentLocation();
-    }
-
-    // Handle photo capture and upload
-    let imageUrl = null;
-    let imageUploadError = null;
-    
-    if (photoUri && permissions.cameraGranted) {
+    // Step 3: Start audio recording IMMEDIATELY (non-blocking)
+    let audioRecordingStarted = false;
+    const audioRecordingPromise = (async () => {
       try {
-        // Get photo metadata
-        const metadata = getPhotoMetadata(location);
-        
-        // Encrypt sensitive data
-        const encryptedMetadata = {
-          timestamp: metadata.timestamp,
-          deviceId: encryptData(metadata.deviceId),
-          gps: location ? encryptData({
-            lat: location.latitude,
-            lng: location.longitude
-          }) : null,
-        };
+        audioRecordingStarted = await startRecording();
+        if (audioRecordingStarted) {
+          console.log('Audio recording started for SOS');
+          updateProgress('audio', 'recording');
+        }
+        return audioRecordingStarted;
+      } catch (err) {
+        console.error('Audio recording failed to start:', err);
+        return false;
+      }
+    })();
 
-        // Upload photo to Firebase Storage
-        imageUrl = await uploadSOSImage(photoUri, encryptedMetadata, currentUser.uid);
-        
-        console.log('✅ SOS photo uploaded successfully:', imageUrl);
-      } catch (error) {
-        console.error('❌ Error uploading SOS photo:', error);
-        imageUploadError = error.message;
-        // Continue with SOS even if photo upload fails
+    // Step 4: Get location (in parallel with audio start)
+    updateProgress('location', 'fetching');
+    let location = null;
+    const locationPromise = (async () => {
+      try {
+        location = await getCurrentLocation();
+        if (location) {
+          updateProgress('location', 'success');
+        }
+        return location;
+      } catch (err) {
+        console.error('Location fetch failed:', err);
+        return null;
+      }
+    })();
+
+    // Wait for audio to start and location in parallel
+    await Promise.allSettled([audioRecordingPromise, locationPromise]);
+
+    // Step 5: Wait for audio recording to complete (10 seconds)
+    updateProgress('audio', 'recording');
+    let audioUri = null;
+    if (audioRecordingStarted) {
+      // Wait for recording duration
+      await new Promise(resolve => setTimeout(resolve, SOS_RECORDING_DURATION_MS));
+      try {
+        audioUri = await stopRecording();
+        if (audioUri) {
+          updateProgress('audio', 'captured');
+          console.log('SOS audio recorded:', audioUri);
+        }
+      } catch (err) {
+        console.error('Error stopping audio recording:', err);
       }
     }
 
-    // Send SMS to all contacts (with image link if available)
-    let smsResult = { success: false };
-    if (permissions.smsAvailable) {
-      smsResult = await sendEmergencySMS(userDetails.emergencyContacts, location, imageUrl);
+    // Step 6: Upload files to Cloudinary (IMAGE + AUDIO in parallel)
+    updateProgress('upload', 'uploading');
+    let imageUrl = null;
+    let audioUrl = null;
+    let imageUploadError = null;
+    let audioUploadError = null;
+
+    const userId = currentUser.uid;
+
+    const uploadResults = await uploadAllSOSFiles({
+      imageUri: photoUri,
+      audioUri,
+      userId,
+    });
+
+    imageUrl = uploadResults.imageUrl;
+    audioUrl = uploadResults.audioUrl;
+
+    if (photoUri && !imageUrl) {
+      imageUploadError = 'Image upload failed';
+    }
+    if (audioUri && !audioUrl) {
+      audioUploadError = 'Audio upload failed';
     }
 
-    // Make call to first contact
-    let callResult = { success: false };
-    callResult = await makeEmergencyCall(userDetails.emergencyContacts);
+    updateProgress('upload', imageUrl || audioUrl ? 'success' : 'partial');
 
-    // Prepare result
+    // Step 7: Send SMS to all contacts with evidence
+    updateProgress('sms', 'sending');
+    let smsResult = { success: false };
+    try {
+      smsResult = await sendEmergencySMS(
+        userDetails.emergencyContacts,
+        location,
+        imageUrl,
+        audioUrl,
+        userDetails.name || 'User'
+      );
+      if (smsResult.success) {
+        updateProgress('sms', 'sent');
+      }
+    } catch (err) {
+      console.error('SMS sending failed:', err);
+    }
+
+    // Step 8: Make emergency call to priority contact
+    updateProgress('call', 'calling');
+    let callResult = { success: false };
+    try {
+      callResult = await makeEmergencyCall(userDetails.emergencyContacts);
+    } catch (err) {
+      console.error('Emergency call failed:', err);
+    }
+
+    updateProgress('complete', 'done');
+
+    // Build result
     const result = {
-      success: smsResult.success || callResult.success,
+      success: smsResult.success || callResult.success || !!imageUrl || !!audioUrl,
       sms: smsResult,
       call: callResult,
-      location: location,
-      imageUrl: imageUrl,
-      imageUploadError: imageUploadError,
-      photoCapture: photoUri ? { success: !!imageUrl } : { skipped: true },
+      location,
+      locationUrl: location ? generateLocationLink(location.latitude, location.longitude) : null,
+      imageUrl,
+      audioUrl,
+      imageUploadError,
+      audioUploadError,
+      audioRecording: {
+        started: audioRecordingStarted,
+        captured: !!audioUri,
+        uploaded: !!audioUrl,
+      },
+      photoCapture: photoUri ? { success: !!imageUrl, uri: photoUri } : { skipped: true },
       contactsCount: userDetails.emergencyContacts.length,
+      timestamp: new Date().toISOString(),
     };
 
     return result;
   } catch (error) {
     console.error('Error triggering SOS:', error);
+    updateProgress('error', error.message);
     throw error;
   }
 };
