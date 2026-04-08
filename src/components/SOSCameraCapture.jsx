@@ -1,19 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Platform, Animated } from 'react-native';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTheme } from '@/utils/useTheme';
 
 export default function SOSCameraCapture({ visible, onCapture, onClose }) {
   const theme = useTheme();
-  const [hasPermission, setHasPermission] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraAvailable, setCameraAvailable] = useState(true);
+  const [cameraReady, setCameraReady] = useState(false);
   const [statusText, setStatusText] = useState('Initializing...');
   const cameraRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
+  const captureAttempted = useRef(false);
 
   useEffect(() => {
     if (visible) {
+      // Reset state for new SOS trigger
+      captureAttempted.current = false;
+      setCameraReady(false);
+      setIsCapturing(false);
+      setStatusText('Initializing...');
+
       // Start pulse animation
       Animated.loop(
         Animated.sequence([
@@ -22,15 +30,23 @@ export default function SOSCameraCapture({ visible, onCapture, onClose }) {
         ])
       ).start();
 
-      requestCameraPermissionAndCapture();
+      requestCameraPermissionAndSetup();
     }
   }, [visible]);
 
-  const requestCameraPermissionAndCapture = async () => {
+  // When camera becomes ready, capture the photo
+  useEffect(() => {
+    if (visible && cameraReady && !captureAttempted.current) {
+      captureAttempted.current = true;
+      // Small delay to ensure camera is fully initialized
+      setTimeout(() => capturePhoto(), 500);
+    }
+  }, [visible, cameraReady]);
+
+  const requestCameraPermissionAndSetup = async () => {
     try {
-      // Check if Camera is available
-      if (!Camera || Platform.OS === 'web') {
-        console.log('Camera not available on this platform');
+      if (Platform.OS === 'web') {
+        console.log('Camera not available on web platform');
         setCameraAvailable(false);
         setStatusText('Camera unavailable - continuing SOS...');
         setTimeout(() => onCapture(null), 1000);
@@ -38,18 +54,29 @@ export default function SOSCameraCapture({ visible, onCapture, onClose }) {
       }
 
       setStatusText('Requesting camera access...');
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-
-      if (status === 'granted') {
-        setStatusText('Capturing evidence photo...');
-        // Delay to let camera initialize
-        setTimeout(() => capturePhoto(), 800);
-      } else {
-        console.log('Camera permission denied');
-        setStatusText('Camera denied - continuing SOS...');
-        setTimeout(() => onCapture(null), 1000);
+      
+      if (!permission?.granted) {
+        const result = await requestPermission();
+        if (!result.granted) {
+          console.log('Camera permission denied');
+          setStatusText('Camera denied - continuing SOS...');
+          setTimeout(() => onCapture(null), 1000);
+          return;
+        }
       }
+
+      setStatusText('Capturing evidence photo...');
+      
+      // If camera doesn't become ready within 5 seconds, proceed without photo
+      setTimeout(() => {
+        if (!captureAttempted.current) {
+          console.log('Camera timeout - proceeding without photo');
+          captureAttempted.current = true;
+          setStatusText('Camera timeout - continuing SOS...');
+          setTimeout(() => onCapture(null), 500);
+        }
+      }, 5000);
+      
     } catch (error) {
       console.error('Camera error:', error);
       setCameraAvailable(false);
@@ -58,8 +85,17 @@ export default function SOSCameraCapture({ visible, onCapture, onClose }) {
     }
   };
 
+  const handleCameraReady = () => {
+    console.log('Camera is ready');
+    setCameraReady(true);
+  };
+
   const capturePhoto = async () => {
-    if (!cameraRef.current || isCapturing) return;
+    if (!cameraRef.current || isCapturing) {
+      console.log('Camera ref not available or already capturing');
+      setTimeout(() => onCapture(null), 500);
+      return;
+    }
 
     setIsCapturing(true);
     try {
@@ -83,15 +119,17 @@ export default function SOSCameraCapture({ visible, onCapture, onClose }) {
 
   if (!visible) return null;
 
+  const hasPermission = permission?.granted;
+
   return (
     <View style={styles.container}>
       {/* Hidden camera (captures silently) */}
       {hasPermission && cameraAvailable && (
-        <Camera
+        <CameraView
           ref={cameraRef}
           style={styles.hiddenCamera}
-          type={Camera?.Constants?.Type?.back || 'back'}
-          autoFocus={Camera?.Constants?.AutoFocus?.on || 'on'}
+          facing="back"
+          onCameraReady={handleCameraReady}
         />
       )}
 
@@ -110,7 +148,7 @@ export default function SOSCameraCapture({ visible, onCapture, onClose }) {
           <Text style={styles.title}>SOS Activating</Text>
           <Text style={styles.statusText}>{statusText}</Text>
           <View style={styles.stepsContainer}>
-            <StepIndicator label="Camera" active={isCapturing || !!hasPermission} done={isCapturing === false && hasPermission} />
+            <StepIndicator label="Camera" active={isCapturing || hasPermission} done={isCapturing === false && hasPermission && cameraReady} />
             <StepIndicator label="Audio" active={true} done={false} />
             <StepIndicator label="Location" active={true} done={false} />
             <StepIndicator label="Upload" active={false} done={false} />

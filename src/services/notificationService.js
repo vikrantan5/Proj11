@@ -1,24 +1,41 @@
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../config/firebaseConfig';
 import { calculateDistance } from './safetyMapService';
 
-// Configure notification handler
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Safely import expo-notifications (crashes in Expo Go SDK 53+)
+let Notifications = null;
+try {
+  Notifications = require('expo-notifications');
+} catch (e) {
+  console.warn('expo-notifications not available:', e.message);
+}
+
+// Configure notification handler safely
+try {
+  if (Notifications && Notifications.setNotificationHandler) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  }
+} catch (e) {
+  console.warn('Failed to configure notification handler:', e.message);
+}
 
 /**
  * Request notification permissions
- * @returns {Promise<boolean>}
  */
 export const requestNotificationPermissions = async () => {
   try {
+    if (!Notifications) {
+      console.warn('Notifications not available');
+      return false;
+    }
+
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     
@@ -32,20 +49,23 @@ export const requestNotificationPermissions = async () => {
       return false;
     }
     
-    // For Android, set notification channel
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('safety-alerts', {
-        name: 'Safety Alerts',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-      });
-      
-      await Notifications.setNotificationChannelAsync('verification-requests', {
-        name: 'Verification Requests',
-        importance: Notifications.AndroidImportance.DEFAULT,
-        vibrationPattern: [0, 250, 250, 250],
-      });
+      try {
+        await Notifications.setNotificationChannelAsync('safety-alerts', {
+          name: 'Safety Alerts',
+          importance: Notifications.AndroidImportance?.MAX || 5,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+        
+        await Notifications.setNotificationChannelAsync('verification-requests', {
+          name: 'Verification Requests',
+          importance: Notifications.AndroidImportance?.DEFAULT || 3,
+          vibrationPattern: [0, 250, 250, 250],
+        });
+      } catch (channelError) {
+        console.warn('Failed to create notification channels:', channelError.message);
+      }
     }
     
     return true;
@@ -57,60 +77,61 @@ export const requestNotificationPermissions = async () => {
 
 /**
  * Get Expo push token for the device
- * @returns {Promise<string|null>}
  */
 export const getPushToken = async () => {
   try {
+    if (!Notifications) {
+      console.warn('Notifications not available - cannot get push token');
+      return null;
+    }
+
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) {
       return null;
     }
     
     const token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log('✅ Expo Push Token:', token);
+    console.log('Expo Push Token:', token);
     return token;
   } catch (error) {
-    console.error('Error getting push token:', error);
+    console.warn('Error getting push token:', error.message);
     return null;
   }
 };
 
 /**
  * Send local notification
- * @param {string} title - Notification title
- * @param {string} body - Notification body
- * @param {Object} data - Additional data
- * @returns {Promise<string>} Notification ID
  */
 export const sendLocalNotification = async (title, body, data = {}) => {
   try {
+    if (!Notifications) {
+      console.warn('Notifications not available - skipping:', title);
+      return null;
+    }
+
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
         data,
         sound: true,
-        priority: Notifications.AndroidNotificationPriority.HIGH,
+        priority: Notifications.AndroidNotificationPriority?.HIGH,
       },
-      trigger: null, // Show immediately
+      trigger: null,
     });
     
     return notificationId;
   } catch (error) {
-    console.error('Error sending local notification:', error);
-    throw error;
+    console.warn('Error sending local notification:', error.message);
+    return null;
   }
 };
 
 /**
  * Find nearby users within radius
- * @param {Object} location - {latitude, longitude}
- * @param {number} radiusKm - Radius in kilometers
- * @returns {Promise<Array>} Array of nearby user IDs with push tokens
  */
 export const findNearbyUsers = async (location, radiusKm = 0.5) => {
   try {
-    // Get all users with push tokens and last known location
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('pushToken', '!=', null));
     const querySnapshot = await getDocs(q);
@@ -121,10 +142,8 @@ export const findNearbyUsers = async (location, radiusKm = 0.5) => {
     querySnapshot.forEach((doc) => {
       const userData = doc.data();
       
-      // Skip current user
       if (doc.id === currentUser?.uid) return;
       
-      // Check if user has location data
       if (userData.lastKnownLocation) {
         const distance = calculateDistance(
           location.latitude,
@@ -143,7 +162,7 @@ export const findNearbyUsers = async (location, radiusKm = 0.5) => {
       }
     });
     
-    console.log(`✅ Found ${nearbyUsers.length} nearby users within ${radiusKm}km`);
+    console.log(`Found ${nearbyUsers.length} nearby users within ${radiusKm}km`);
     return nearbyUsers;
   } catch (error) {
     console.error('Error finding nearby users:', error);
@@ -153,14 +172,9 @@ export const findNearbyUsers = async (location, radiusKm = 0.5) => {
 
 /**
  * Create verification request for nearby users
- * @param {string} markerId - Safety marker ID
- * @param {Object} markerData - Marker data (coordinates, attributes)
- * @param {Array} nearbyUsers - Array of nearby user objects
- * @returns {Promise<void>}
  */
 export const createVerificationRequest = async (markerId, markerData, nearbyUsers) => {
   try {
-    // Store verification request in Firestore
     const verificationRef = collection(db, 'verification_requests');
     const verificationDoc = await addDoc(verificationRef, {
       markerId,
@@ -171,11 +185,10 @@ export const createVerificationRequest = async (markerId, markerData, nearbyUser
       status: 'pending',
     });
     
-    console.log(`✅ Verification request created: ${verificationDoc.id}`);
+    console.log(`Verification request created: ${verificationDoc.id}`);
     
-    // Send local notification to inform about verification request
     await sendLocalNotification(
-      '📍 Verification Request Sent',
+      'Verification Request Sent',
       `${nearbyUsers.length} nearby users will be notified to verify your safety marker.`,
       { verificationId: verificationDoc.id, markerId }
     );
@@ -189,25 +202,19 @@ export const createVerificationRequest = async (markerId, markerData, nearbyUser
 
 /**
  * Send verification notification to nearby users
- * @param {string} markerId - Safety marker ID
- * @param {Object} location - Marker location
- * @param {Object} attributes - Safety attributes
- * @returns {Promise<void>}
  */
 export const notifyNearbyUsersForVerification = async (markerId, location, attributes) => {
   try {
-    // Find nearby users
-    const nearbyUsers = await findNearbyUsers(location, 0.5); // 500m radius
+    const nearbyUsers = await findNearbyUsers(location, 0.5);
     
     if (nearbyUsers.length === 0) {
       console.log('No nearby users found for verification');
       return;
     }
     
-    // Create verification request
     await createVerificationRequest(markerId, { location, attributes }, nearbyUsers);
     
-    console.log(`✅ Verification notifications queued for ${nearbyUsers.length} users`);
+    console.log(`Verification notifications queued for ${nearbyUsers.length} users`);
   } catch (error) {
     console.error('Error notifying nearby users:', error);
   }
@@ -215,10 +222,13 @@ export const notifyNearbyUsersForVerification = async (markerId, location, attri
 
 /**
  * Listen for verification requests
- * @param {Function} callback - Callback function when verification request received
- * @returns {Function} Unsubscribe function
  */
 export const listenForVerificationRequests = (callback) => {
+  if (!Notifications) {
+    console.warn('Notifications not available - cannot listen for verification requests');
+    return () => {};
+  }
+
   const subscription = Notifications.addNotificationReceivedListener(notification => {
     const { data } = notification.request.content;
     

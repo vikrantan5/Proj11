@@ -1,6 +1,6 @@
 import { Camera } from 'expo-camera';
 import * as Device from 'expo-device';
-import { Platform, Alert } from 'react-native';
+import { Platform } from 'react-native';
 
 /**
  * Request camera permissions
@@ -22,16 +22,12 @@ export const requestCameraPermission = async () => {
  */
 export const captureBackCameraPhoto = async () => {
   try {
-    // Check camera permissions
     const hasPermission = await requestCameraPermission();
     if (!hasPermission) {
       throw new Error('Camera permission not granted');
     }
 
-    // For native platforms, we'll use Camera API
     if (Platform.OS === 'android' || Platform.OS === 'ios') {
-      // Create a camera reference (we'll handle this in the component)
-      // For now, return metadata structure
       const metadata = {
         timestamp: new Date().toISOString(),
         deviceId: Device.modelName || 'Unknown Device',
@@ -42,10 +38,9 @@ export const captureBackCameraPhoto = async () => {
 
       return {
         metadata,
-        requiresComponent: true, // Indicates camera component is needed
+        requiresComponent: true,
       };
     } else {
-      // For web, we cannot access camera directly in service
       throw new Error('Web camera capture not supported in service layer');
     }
   } catch (error) {
