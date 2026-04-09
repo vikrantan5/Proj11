@@ -52,6 +52,8 @@ export const ENV = {
   
   // Backend URL
   BACKEND_URL: getEnvVar('backendUrl') || process.env.BACKEND_URL,
+    // YouTube API Key
+  YOUTUBE_API_KEY: getEnvVar('youtubeApiKey') || process.env.YOUTUBE_API_KEY,
 };
 
 export default ENV;

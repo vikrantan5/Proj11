@@ -105,6 +105,7 @@ module.exports = {
       cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
       cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
       backendUrl: process.env.BACKEND_URL,
+      youtubeApiKey: process.env.YOUTUBE_API_KEY,
     },
     runtimeVersion: "1.0.0"
   }

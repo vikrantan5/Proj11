@@ -115,6 +115,9 @@ const updateDailySummary = async (eventType) => {
       case ANALYTICS_EVENTS.USER_LOGIN:
         updateData.logins = increment(1);
         break;
+         case ANALYTICS_EVENTS.FAKE_CALL_USED:
+        updateData.fakeCallsUsed = increment(1);
+        break;
       default:
         break;
     }

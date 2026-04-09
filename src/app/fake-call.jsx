@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/utils/useTheme";
 import { auth } from "@/config/firebaseConfig";
 import { getUserDetails } from "@/services/userService";
+import { trackEvent, ANALYTICS_EVENTS } from "@/services/analyticsService";
 
 const { width, height } = Dimensions.get("window");
 
@@ -150,6 +151,11 @@ export default function FakeCallScreen() {
   const handleContactSelect = (contact) => {
     setSelectedContact(contact);
     setInCall(true);
+       // Track fake call event for admin dashboard counter
+    trackEvent(ANALYTICS_EVENTS.FAKE_CALL_USED, {
+      contactName: contact.name,
+      triggeredAt: new Date().toISOString(),
+    });
   };
 
   const handleAccept = async () => {

@@ -9,6 +9,7 @@ import { getUserDetails } from '@/services/userService';
 import { ThemeProvider } from '@/utils/ThemeContext';
 import { AppState, Alert, Vibration } from 'react-native';
 import { triggerSOS } from '@/services/sosService';
+import { Toaster } from 'sonner-native';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -217,6 +218,7 @@ function RootLayoutNav() {
       <Stack.Screen name="emergency-contacts" />
        <Stack.Screen name="teams" />
       <Stack.Screen name="video-player" />
+        <Stack.Screen name="notifications" />
     </Stack>
   );
 }
@@ -227,6 +229,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <RootLayoutNav />
+                    <Toaster />
         </GestureHandlerRootView>
       </QueryClientProvider>
     </ThemeProvider>

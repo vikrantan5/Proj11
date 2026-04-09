@@ -45,6 +45,7 @@ import {
   calculateDistance,
   getPendingVerificationMarkers,
   getSafetyScoreCategory,
+   verifySafetyMarker,
 } from "@/services/safetyMapService";
 import {
   getCurrentLocation,
@@ -227,14 +228,41 @@ export default function SafetyMapScreen() {
   };
 
   const handleVerifyMarker = (marker) => {
-    // Verification modal removed - show alert instead
+    
     Alert.alert(
-      "Verification Feature",
-      "Marker verification is currently unavailable.",
-      [{ text: "OK" }]
+          "Verify Safety Marker",
+      `Do you confirm this is a "${marker.status.toUpperCase()}" zone? Your verification helps the community.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Verified – Information is correct",
+          onPress: async () => {
+            try {
+              await verifySafetyMarker(marker.id, true, marker.attributes);
+              Alert.alert("Success", "Marker verified successfully! Thank you for helping the community.");
+              checkPendingVerifications();
+            } catch (error) {
+              console.error("Verification error:", error);
+              Alert.alert("Error", error.message || "Failed to verify marker. Please try again.");
+            }
+          },
+        },
+        {
+          text: "Dispute – Information is wrong",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await verifySafetyMarker(marker.id, false, marker.attributes);
+              Alert.alert("Noted", "Your dispute has been recorded. Thank you for your feedback.");
+              checkPendingVerifications();
+            } catch (error) {
+              console.error("Dispute error:", error);
+              Alert.alert("Error", error.message || "Failed to submit dispute. Please try again.");
+            }
+          },
+        },
+      ]
     );
-    // setSelectedMarkerForVerification(marker);
-    // setShowVerificationModal(true);
   };
 
   const handleRouteSelect = (routeType) => {
@@ -294,7 +322,7 @@ export default function SafetyMapScreen() {
 
               Alert.alert(
                 "Route Calculated",
-                `Distance: ${(routeData.distance / 1000).toFixed(2)}km\nSafety Score: ${routeData.safetyScore || 'N/A'}/100`,
+                `Distance: ${(routeData.distance / 1000).toFixed(2)}kmnSafety Score: ${routeData.safetyScore || 'N/A'}/100`,
                 [{ text: "OK" }]
               );
             } catch (error) {
