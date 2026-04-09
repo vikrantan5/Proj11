@@ -52,6 +52,7 @@ const xhrUpload = (url, formData, headers = {}) => {
 
 /**
  * Upload a file directly to Cloudinary using XMLHttpRequest (bypasses Expo fetch issue)
+ * Uses unsigned upload with the 'sos_emergency' preset
  * @param {string} fileUri - Local file URI
  * @param {string} resourceType - 'image', 'video' (audio uses 'video'), or 'raw'
  * @param {string} folder - Cloudinary folder path
@@ -166,8 +167,9 @@ const uploadViaBackendBase64 = async (fileUri, fileType, userId) => {
   }
 
   // Read file as base64 using expo-file-system
+  // Use string 'base64' directly to avoid FileSystem.EncodingType.Base64 being undefined
   const base64Data = await FileSystem.readAsStringAsync(fileUri, {
-    encoding: FileSystem.EncodingType.Base64,
+    encoding: 'base64',
   });
 
   const fileName = fileUri.split('/').pop() || 'file';
@@ -184,45 +186,44 @@ const uploadViaBackendBase64 = async (fileUri, fileType, userId) => {
     payload.audio_filename = fileName;
   }
 
-  // Use standard fetch with JSON body (no FormData - avoids the Expo issue entirely)
-  const response = await fetch(`${BACKEND_URL}/api/sos/upload-base64`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify(payload),
+  // Use XHR with JSON body (no FormData - avoids the Expo issue entirely)
+  const jsonBody = JSON.stringify(payload);
+
+  const result = await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BACKEND_URL}/api/sos/upload-base64`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Accept', 'application/json');
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch (e) {
+          reject(new Error('Invalid JSON response from server'));
+        }
+      } else {
+        reject(new Error(`Base64 upload failed: ${xhr.status} - ${xhr.responseText}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network error during base64 upload'));
+    xhr.ontimeout = () => reject(new Error('Base64 upload timed out'));
+    xhr.timeout = 120000; // 2 min timeout for large base64 payloads
+    xhr.send(jsonBody);
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Base64 upload failed: ${response.status} - ${errorText}`);
-  }
-
-  const result = await response.json();
   return fileType === 'image' ? result.image_url : result.audio_url;
 };
 
 /**
  * Upload SOS image with 3-tier fallback:
- * 1. Backend via XHR FormData (primary - most reliable)
- * 2. Direct Cloudinary via XHR FormData
+ * 1. Direct Cloudinary via XHR FormData (fastest, no backend needed)
+ * 2. Backend via XHR FormData (server-side signed upload)
  * 3. Backend via base64 JSON (ultimate fallback)
  */
 export const uploadSOSImageToCloudinary = async (imageUri, userId = 'unknown') => {
-  // Tier 1: Try backend upload via XHR
-  try {
-    console.log('Attempting image upload via backend (XHR)...');
-    const url = await uploadViaBackend(imageUri, 'image', userId);
-    if (url) {
-      console.log('Image uploaded via backend:', url);
-      return url;
-    }
-  } catch (error) {
-    console.warn('Backend XHR image upload failed:', error.message);
-  }
-
-  // Tier 2: Try direct Cloudinary upload via XHR
+  // Tier 1: Try direct Cloudinary upload via XHR (fastest - uses unsigned preset)
   try {
     console.log('Attempting direct Cloudinary image upload (XHR)...');
     const result = await uploadToCloudinary(imageUri, 'image', `sos/images/${userId}`);
@@ -232,6 +233,18 @@ export const uploadSOSImageToCloudinary = async (imageUri, userId = 'unknown') =
     }
   } catch (error) {
     console.warn('Direct Cloudinary image upload failed:', error.message);
+  }
+
+  // Tier 2: Try backend upload via XHR
+  try {
+    console.log('Attempting image upload via backend (XHR)...');
+    const url = await uploadViaBackend(imageUri, 'image', userId);
+    if (url) {
+      console.log('Image uploaded via backend:', url);
+      return url;
+    }
+  } catch (error) {
+    console.warn('Backend XHR image upload failed:', error.message);
   }
 
   // Tier 3: Try base64 upload via backend
@@ -252,19 +265,7 @@ export const uploadSOSImageToCloudinary = async (imageUri, userId = 'unknown') =
  * Upload SOS audio with 3-tier fallback
  */
 export const uploadSOSAudioToCloudinary = async (audioUri, userId = 'unknown') => {
-  // Tier 1: Try backend upload via XHR
-  try {
-    console.log('Attempting audio upload via backend (XHR)...');
-    const url = await uploadViaBackend(audioUri, 'audio', userId);
-    if (url) {
-      console.log('Audio uploaded via backend:', url);
-      return url;
-    }
-  } catch (error) {
-    console.warn('Backend XHR audio upload failed:', error.message);
-  }
-
-  // Tier 2: Try direct Cloudinary upload via XHR
+  // Tier 1: Try direct Cloudinary upload via XHR (fastest - uses unsigned preset)
   try {
     console.log('Attempting direct Cloudinary audio upload (XHR)...');
     const result = await uploadToCloudinary(audioUri, 'video', `sos/audio/${userId}`);
@@ -274,6 +275,18 @@ export const uploadSOSAudioToCloudinary = async (audioUri, userId = 'unknown') =
     }
   } catch (error) {
     console.warn('Direct Cloudinary audio upload failed:', error.message);
+  }
+
+  // Tier 2: Try backend upload via XHR
+  try {
+    console.log('Attempting audio upload via backend (XHR)...');
+    const url = await uploadViaBackend(audioUri, 'audio', userId);
+    if (url) {
+      console.log('Audio uploaded via backend:', url);
+      return url;
+    }
+  } catch (error) {
+    console.warn('Backend XHR audio upload failed:', error.message);
   }
 
   // Tier 3: Try base64 upload via backend
