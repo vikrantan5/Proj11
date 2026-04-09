@@ -4,14 +4,13 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
   RefreshControl,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Play, Video, Shield } from 'lucide-react-native';
+import { Video } from 'lucide-react-native';
 import {
   useFonts,
   Inter_400Regular,
@@ -21,9 +20,9 @@ import {
 } from '@expo-google-fonts/inter';
 import { useTheme } from '@/utils/useTheme';
 import LoadingScreen from '@/components/LoadingScreen';
-import { router } from 'expo-router';
 import { getPublishedVideos, VIDEO_CATEGORIES } from '@/services/videoService';
 import { toast } from 'sonner-native';
+import VideoCard from '@/components/VideoCard';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 60) / 2;
@@ -86,7 +85,7 @@ export default function VideosScreen() {
 
   return (
     <LinearGradient colors={theme.colors.backgroundGradient} style={{ flex: 1 }}>
-      <StatusBar style="light" />
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
           contentContainerStyle={{
@@ -141,6 +140,7 @@ export default function VideosScreen() {
                   key={category}
                   onPress={() => setSelectedCategory(category)}
                   activeOpacity={0.8}
+                  data-testid={`category-filter-${category}`}
                 >
                   <View
                     style={{
@@ -148,16 +148,26 @@ export default function VideosScreen() {
                       paddingVertical: 10,
                       borderRadius: 20,
                       backgroundColor:
-                        selectedCategory === category ? 'rgba(0, 229, 255, 0.3)' : 'rgba(255, 255, 255, 0.05)',
+                        selectedCategory === category
+                          ? 'rgba(0, 229, 255, 0.3)'
+                          : theme.isDark
+                          ? 'rgba(255, 255, 255, 0.05)'
+                          : 'rgba(0, 0, 0, 0.04)',
                       borderWidth: 1,
-                      borderColor: selectedCategory === category ? theme.colors.neonCyan : theme.colors.borderLight,
+                      borderColor:
+                        selectedCategory === category
+                          ? theme.colors.neonCyan
+                          : theme.colors.borderLight,
                     }}
                   >
                     <Text
                       style={{
                         fontFamily: 'Inter_600SemiBold',
                         fontSize: 13,
-                        color: selectedCategory === category ? theme.colors.neonCyan : theme.colors.text,
+                        color:
+                          selectedCategory === category
+                            ? theme.colors.neonCyan
+                            : theme.colors.text,
                       }}
                     >
                       {category}
@@ -190,98 +200,16 @@ export default function VideosScreen() {
                 style={{
                   flexDirection: 'row',
                   flexWrap: 'wrap',
-                  gap: 16,
+                  gap: 12,
                   justifyContent: 'space-between',
                 }}
               >
                 {filteredVideos.map((video) => (
-                  <TouchableOpacity
+                  <VideoCard
                     key={video.id}
-                    onPress={() => router.push({ pathname: '/video-player', params: { videoId: video.id } })}
-                    activeOpacity={0.8}
-                    style={{ width: CARD_WIDTH }}
-                  >
-                    <LinearGradient
-                      colors={['rgba(30, 35, 60, 0.6)', 'rgba(20, 25, 50, 0.4)']}
-                      style={{
-                        borderRadius: 16,
-                        overflow: 'hidden',
-                        borderWidth: 1,
-                        borderColor: theme.colors.borderLight,
-                      }}
-                    >
-                      {/* Thumbnail */}
-                      <View style={{ position: 'relative' }}>
-                        <Image
-                          source={{ uri: video.thumbnailUrl }}
-                          style={{ width: '100%', height: 120, backgroundColor: theme.colors.cardBackground }}
-                          resizeMode="cover"
-                        />
-                        <View
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <View
-                            style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: 20,
-                              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <Play size={20} color="#000" strokeWidth={2} fill="#000" />
-                          </View>
-                        </View>
-                        {/* Category Badge */}
-                        <View
-                          style={{
-                            position: 'absolute',
-                            top: 8,
-                            left: 8,
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 12,
-                            backgroundColor: 'rgba(0, 229, 255, 0.9)',
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: 'Inter_600SemiBold',
-                              fontSize: 10,
-                              color: '#000',
-                            }}
-                          >
-                            {video.category}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Video Info */}
-                      <View style={{ padding: 12 }}>
-                        <Text
-                          style={{
-                            fontFamily: 'Inter_600SemiBold',
-                            fontSize: 14,
-                            color: theme.colors.text,
-                            lineHeight: 18,
-                          }}
-                          numberOfLines={2}
-                        >
-                          {video.title}
-                        </Text>
-                      </View>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                    video={video}
+                    cardWidth={CARD_WIDTH}
+                  />
                 ))}
               </View>
             </View>

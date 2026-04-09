@@ -31,6 +31,7 @@ import {
   HelpCircle,
   LogOut,
   Settings,
+    UsersRound,
 } from "lucide-react-native";
 import { useTheme } from "@/utils/useTheme";
 import LoadingScreen from "@/components/LoadingScreen";
@@ -688,7 +689,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Support */}
+     {/* Support & Team */}
         <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
           <Text
             style={{
@@ -713,6 +714,20 @@ export default function ProfileScreen() {
               title="Help & Support"
               subtitle="Get help and access safety resources"
               onPress={handleSupport}
+            />
+                  <View
+              style={{
+                height: 1,
+                backgroundColor: theme.colors.divider,
+                marginVertical: 8,
+              }}
+            />
+
+            <SettingItem
+              icon={UsersRound}
+              title="Meet the Team"
+              subtitle="View the developers behind Maitri"
+              onPress={() => router.push("/teams")}
             />
           </View>
         </View>

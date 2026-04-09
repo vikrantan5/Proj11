@@ -215,6 +215,8 @@ function RootLayoutNav() {
       <Stack.Screen name="in-call" />
       <Stack.Screen name="geofences" />
       <Stack.Screen name="emergency-contacts" />
+       <Stack.Screen name="teams" />
+      <Stack.Screen name="video-player" />
     </Stack>
   );
 }

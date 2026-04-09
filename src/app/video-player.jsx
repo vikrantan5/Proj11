@@ -1,17 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Dimensions,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Video } from 'lucide-react-native';
+import { ArrowLeft, Video, MessageSquare, ChevronUp } from 'lucide-react-native';
 import {
   useFonts,
   Inter_400Regular,
@@ -25,9 +23,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { getVideoById } from '@/services/videoService';
 import { toast } from 'sonner-native';
 import YoutubePlayer from 'react-native-youtube-iframe';
-import { WebView } from 'react-native-webview';
+import YouTubeComments from '@/components/YouTubeComments';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export default function VideoPlayerScreen() {
   const theme = useTheme();
@@ -64,6 +62,16 @@ export default function VideoPlayerScreen() {
     }
   };
 
+  const onStateChange = useCallback((state) => {
+    if (state === 'ended') {
+      setPlaying(false);
+    }
+  }, []);
+
+  const toggleComments = useCallback(() => {
+    setShowComments((prev) => !prev);
+  }, []);
+
   if (!fontsLoaded || loading) {
     return <LoadingScreen />;
   }
@@ -71,9 +79,6 @@ export default function VideoPlayerScreen() {
   if (!video) {
     return null;
   }
-
-  // Construct YouTube URL with comments visible
-  const youtubeCommentsUrl = `https://m.youtube.com/watch?v=${video.videoId}`;
 
   return (
     <LinearGradient colors={theme.colors.backgroundGradient} style={{ flex: 1 }}>
@@ -88,7 +93,11 @@ export default function VideoPlayerScreen() {
             paddingVertical: 16,
           }}
         >
-          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{ marginRight: 16 }}
+            data-testid="video-player-back-btn"
+          >
             <ArrowLeft size={24} color={theme.colors.text} strokeWidth={2} />
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -113,17 +122,13 @@ export default function VideoPlayerScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
-          {/* YouTube Player */}
-          <View style={{ marginBottom: 20 }}>
+          {/* YouTube Player - Always rendered once, never re-mounted */}
+          <View style={{ marginBottom: 20 }} data-testid="video-player-container">
             <YoutubePlayer
-              height={width * 0.5625} // 16:9 aspect ratio
+              height={width * 0.5625}
               play={playing}
               videoId={video.videoId}
-              onChangeState={(state) => {
-                if (state === 'ended') {
-                  setPlaying(false);
-                }
-              }}
+              onChangeState={onStateChange}
             />
           </View>
 
@@ -176,28 +181,53 @@ export default function VideoPlayerScreen() {
             ) : null}
           </View>
 
-          {/* Comments Section Toggle */}
+          {/* Comments Toggle Button */}
           <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
             <TouchableOpacity
-              onPress={() => setShowComments(!showComments)}
+              onPress={toggleComments}
               activeOpacity={0.8}
+              data-testid="toggle-comments-btn"
             >
               <LinearGradient
-                colors={['rgba(0, 229, 255, 0.2)', 'rgba(156, 39, 255, 0.1)']}
+                colors={
+                  showComments
+                    ? ['rgba(156, 39, 255, 0.2)', 'rgba(0, 229, 255, 0.1)']
+                    : ['rgba(0, 229, 255, 0.2)', 'rgba(156, 39, 255, 0.1)']
+                }
                 style={{
                   borderRadius: 12,
                   padding: 14,
+                  flexDirection: 'row',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   borderWidth: 1,
-                  borderColor: theme.colors.neonCyan,
+                  borderColor: showComments
+                    ? theme.colors.neonPurple
+                    : theme.colors.neonCyan,
                 }}
               >
+                {showComments ? (
+                  <ChevronUp
+                    size={18}
+                    color={theme.colors.neonPurple}
+                    strokeWidth={2}
+                  />
+                ) : (
+                  <MessageSquare
+                    size={18}
+                    color={theme.colors.neonCyan}
+                    strokeWidth={2}
+                  />
+                )}
                 <Text
                   style={{
                     fontFamily: 'Inter_600SemiBold',
                     fontSize: 14,
-                    color: theme.colors.neonCyan,
+                    color: showComments
+                      ? theme.colors.neonPurple
+                      : theme.colors.neonCyan,
                     letterSpacing: 0.5,
+                    marginLeft: 8,
                   }}
                 >
                   {showComments ? 'Hide Comments' : 'Show YouTube Comments'}
@@ -206,51 +236,25 @@ export default function VideoPlayerScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* YouTube Comments WebView */}
+          {/* Comments Section - Fetched via YouTube API, does NOT reload video */}
           {showComments && (
             <View style={{ paddingHorizontal: 24 }}>
-              <LinearGradient
-                colors={['rgba(30, 35, 60, 0.6)', 'rgba(20, 25, 50, 0.4)']}
+              <View
                 style={{
                   borderRadius: 16,
                   overflow: 'hidden',
                   borderWidth: 1,
-                  borderColor: theme.colors.borderLight,
-                  height: height * 0.5,
+                  borderColor: theme.isDark
+                    ? 'rgba(255,255,255,0.08)'
+                    : 'rgba(0,0,0,0.06)',
+                  backgroundColor: theme.isDark
+                    ? 'rgba(30, 35, 60, 0.5)'
+                    : theme.colors.cardBackground,
+                  padding: 16,
                 }}
               >
-                <WebView
-                  source={{ uri: youtubeCommentsUrl }}
-                  style={{ flex: 1, backgroundColor: 'transparent' }}
-                  startInLoadingState={true}
-                  renderLoading={() => (
-                    <View
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        backgroundColor: 'rgba(20, 25, 50, 0.8)',
-                      }}
-                    >
-                      <ActivityIndicator size="large" color={theme.colors.neonCyan} />
-                      <Text
-                        style={{
-                          fontFamily: 'Inter_500Medium',
-                          fontSize: 14,
-                          color: theme.colors.textSecondary,
-                          marginTop: 12,
-                        }}
-                      >
-                        Loading comments...
-                      </Text>
-                    </View>
-                  )}
-                />
-              </LinearGradient>
+                <YouTubeComments videoId={video.videoId} />
+              </View>
             </View>
           )}
         </ScrollView>
