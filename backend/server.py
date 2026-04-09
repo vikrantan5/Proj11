@@ -13,6 +13,8 @@ import cloudinary
 import cloudinary.uploader
 import tempfile
 
+import base64
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -95,6 +97,14 @@ class SOSUploadResponse(BaseModel):
     image_url: Optional[str] = None
     audio_url: Optional[str] = None
     message: str = "Upload complete"
+
+
+class SOSBase64UploadRequest(BaseModel):
+    user_id: str = "unknown"
+    image_base64: Optional[str] = None
+    image_filename: Optional[str] = "sos_image.jpg"
+    audio_base64: Optional[str] = None
+    audio_filename: Optional[str] = "sos_audio.m4a"
 
 
 # ============ Status Routes ============
@@ -187,6 +197,72 @@ async def sos_upload(
     except Exception as e:
         logger.error(f"SOS upload failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    
+
+@api_router.post("/sos/upload-base64", response_model=SOSUploadResponse)
+async def sos_upload_base64(request: SOSBase64UploadRequest):
+    """
+    Upload SOS evidence files via base64 encoding.
+    This avoids FormData issues on React Native/Expo.
+    """
+    image_url = None
+    audio_url = None
+
+    try:
+        if request.image_base64:
+            logger.info(f"Uploading base64 SOS image for user {request.user_id}")
+            image_data = base64.b64decode(request.image_base64)
+            suffix = '.jpg'
+            if request.image_filename and '.' in request.image_filename:
+                suffix = '.' + request.image_filename.rsplit('.', 1)[1]
+
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(image_data)
+                tmp_path = tmp.name
+
+            try:
+                result = cloudinary.uploader.upload(
+                    tmp_path,
+                    folder=f"sos/images/{request.user_id}",
+                    resource_type="image",
+                    transformation=[{"quality": "auto", "fetch_format": "auto"}]
+                )
+                image_url = result.get('secure_url')
+                logger.info(f"SOS base64 image uploaded: {image_url}")
+            finally:
+                os.unlink(tmp_path)
+
+        if request.audio_base64:
+            logger.info(f"Uploading base64 SOS audio for user {request.user_id}")
+            audio_data = base64.b64decode(request.audio_base64)
+            suffix = '.m4a'
+            if request.audio_filename and '.' in request.audio_filename:
+                suffix = '.' + request.audio_filename.rsplit('.', 1)[1]
+
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(audio_data)
+                tmp_path = tmp.name
+
+            try:
+                result = cloudinary.uploader.upload(
+                    tmp_path,
+                    folder=f"sos/audio/{request.user_id}",
+                    resource_type="video",
+                )
+                audio_url = result.get('secure_url')
+                logger.info(f"SOS base64 audio uploaded: {audio_url}")
+            finally:
+                os.unlink(tmp_path)
+
+        return SOSUploadResponse(
+            image_url=image_url,
+            audio_url=audio_url,
+            message="Base64 upload complete"
+        )
+
+    except Exception as e:
+        logger.error(f"SOS base64 upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Base64 upload failed: {str(e)}")
 
 
 @api_router.post("/sos/notify")

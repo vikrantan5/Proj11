@@ -1,17 +1,57 @@
 
 import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import ENV from '../config/env';
 
-// Cloudinary config - loaded from env
+// Cloudinary config
 const CLOUDINARY_CLOUD_NAME = ENV.CLOUDINARY_CLOUD_NAME || 'dmwj4h3i4';
 const CLOUDINARY_API_KEY = ENV.CLOUDINARY_API_KEY || '165684144277855';
 
-// Backend URL for signed uploads
+// Backend URL for server-side uploads
 const BACKEND_URL = ENV.BACKEND_URL || '';
 
 /**
- * Upload a file directly to Cloudinary (unsigned for SOS emergency - speed priority)
- * For SOS, we use direct upload to minimize latency
+ * XMLHttpRequest-based file upload that works with React Native FormData.
+ * This bypasses Expo's custom fetch which doesn't support {uri, type, name} FormData parts.
+ */
+const xhrUpload = (url, formData, headers = {}) => {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+
+    // Set headers
+    Object.keys(headers).forEach(key => {
+      xhr.setRequestHeader(key, headers[key]);
+    });
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const response = JSON.parse(xhr.responseText);
+          resolve(response);
+        } catch (e) {
+          resolve(xhr.responseText);
+        }
+      } else {
+        reject(new Error(`Upload failed with status ${xhr.status}: ${xhr.responseText}`));
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(new Error('Network error during upload'));
+    };
+
+    xhr.ontimeout = () => {
+      reject(new Error('Upload timed out'));
+    };
+
+    xhr.timeout = 60000; // 60 second timeout
+    xhr.send(formData);
+  });
+};
+
+/**
+ * Upload a file directly to Cloudinary using XMLHttpRequest (bypasses Expo fetch issue)
  * @param {string} fileUri - Local file URI
  * @param {string} resourceType - 'image', 'video' (audio uses 'video'), or 'raw'
  * @param {string} folder - Cloudinary folder path
@@ -38,42 +78,24 @@ export const uploadToCloudinary = async (fileUri, resourceType = 'image', folder
       if (!fileName.includes('.')) fileName += '.m4a';
     }
 
-    // Build form data
+    // Build form data using React Native compatible format
     const formData = new FormData();
 
-    if (Platform.OS === 'web') {
-      // Web: fetch blob first
-      const response = await fetch(fileUri);
-      const blob = await response.blob();
-      formData.append('file', blob, fileName);
-    } else {
-      // React Native: use URI directly
-      formData.append('file', {
-        uri: fileUri,
-        type: fileType,
-        name: fileName,
-      });
-    }
+    formData.append('file', {
+      uri: Platform.OS === 'android' ? fileUri : fileUri.replace('file://', ''),
+      type: fileType,
+      name: fileName,
+    });
 
     formData.append('upload_preset', 'sos_emergency');
     formData.append('folder', folder);
     formData.append('api_key', CLOUDINARY_API_KEY);
 
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'Accept': 'application/json',
-      },
+    // Use XMLHttpRequest instead of fetch to avoid Expo's FormData issues
+    const result = await xhrUpload(uploadUrl, formData, {
+      'Accept': 'application/json',
     });
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('Cloudinary upload error response:', errorData);
-      throw new Error(`Upload failed with status ${response.status}`);
-    }
-
-    const result = await response.json();
     console.log(`Cloudinary ${resourceType} upload success:`, result.secure_url);
 
     return {
@@ -90,62 +112,8 @@ export const uploadToCloudinary = async (fileUri, resourceType = 'image', folder
 };
 
 /**
- * Upload image to Cloudinary via backend (signed upload)
- * @param {string} imageUri - Local image URI
- * @param {string} userId - User ID for folder organization
- * @returns {Promise<string>} Secure URL of uploaded image
- */
-export const uploadSOSImageToCloudinary = async (imageUri, userId = 'unknown') => {
-  try {
-    const result = await uploadToCloudinary(
-      imageUri,
-      'image',
-      `sos/images/${userId}`
-    );
-    return result.url;
-  } catch (error) {
-    console.error('SOS image upload failed:', error);
-
-    // Fallback: Try server-side upload
-    try {
-      return await uploadViaBackend(imageUri, 'image', userId);
-    } catch (backendError) {
-      console.error('Backend image upload also failed:', backendError);
-      throw error;
-    }
-  }
-};
-
-/**
- * Upload audio to Cloudinary
- * @param {string} audioUri - Local audio file URI
- * @param {string} userId - User ID for folder organization
- * @returns {Promise<string>} Secure URL of uploaded audio
- */
-export const uploadSOSAudioToCloudinary = async (audioUri, userId = 'unknown') => {
-  try {
-    // Audio files use 'video' resource type in Cloudinary
-    const result = await uploadToCloudinary(
-      audioUri,
-      'video',
-      `sos/audio/${userId}`
-    );
-    return result.url;
-  } catch (error) {
-    console.error('SOS audio upload failed:', error);
-
-    // Fallback: Try server-side upload
-    try {
-      return await uploadViaBackend(audioUri, 'audio', userId);
-    } catch (backendError) {
-      console.error('Backend audio upload also failed:', backendError);
-      throw error;
-    }
-  }
-};
-
-/**
- * Upload file via backend server (fallback for signed uploads)
+ * Upload file via backend server using XMLHttpRequest (FormData with file URI)
+ * Primary upload method - routes through backend for reliability
  * @param {string} fileUri - Local file URI
  * @param {string} fileType - 'image' or 'audio'
  * @param {string} userId - User ID
@@ -160,35 +128,166 @@ const uploadViaBackend = async (fileUri, fileType, userId) => {
   formData.append('user_id', userId);
 
   const fileName = fileUri.split('/').pop() || 'file';
+  const uri = Platform.OS === 'android' ? fileUri : fileUri.replace('file://', '');
 
   if (fileType === 'image') {
     formData.append('image_file', {
-      uri: fileUri,
+      uri: uri,
       type: 'image/jpeg',
       name: fileName,
     });
   } else {
     formData.append('audio_file', {
-      uri: fileUri,
+      uri: uri,
       type: 'audio/m4a',
       name: fileName,
     });
   }
 
-  const response = await fetch(`${BACKEND_URL}/api/sos/upload`, {
+  // Use XHR instead of fetch to avoid Expo's FormData issue
+  const result = await xhrUpload(`${BACKEND_URL}/api/sos/upload`, formData, {
+    'Accept': 'application/json',
+  });
+
+  return fileType === 'image' ? result.image_url : result.audio_url;
+};
+
+/**
+ * Upload file via backend using base64 encoding (ultimate fallback)
+ * Avoids all FormData issues by encoding file as base64 string and sending as JSON
+ * @param {string} fileUri - Local file URI
+ * @param {string} fileType - 'image' or 'audio'
+ * @param {string} userId - User ID
+ * @returns {Promise<string>} URL of uploaded file
+ */
+const uploadViaBackendBase64 = async (fileUri, fileType, userId) => {
+  if (!BACKEND_URL) {
+    throw new Error('Backend URL not configured');
+  }
+
+  // Read file as base64 using expo-file-system
+  const base64Data = await FileSystem.readAsStringAsync(fileUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+
+  const fileName = fileUri.split('/').pop() || 'file';
+
+  const payload = {
+    user_id: userId,
+  };
+
+  if (fileType === 'image') {
+    payload.image_base64 = base64Data;
+    payload.image_filename = fileName;
+  } else {
+    payload.audio_base64 = base64Data;
+    payload.audio_filename = fileName;
+  }
+
+  // Use standard fetch with JSON body (no FormData - avoids the Expo issue entirely)
+  const response = await fetch(`${BACKEND_URL}/api/sos/upload-base64`, {
     method: 'POST',
-    body: formData,
     headers: {
+      'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    throw new Error(`Backend upload failed: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`Base64 upload failed: ${response.status} - ${errorText}`);
   }
 
   const result = await response.json();
   return fileType === 'image' ? result.image_url : result.audio_url;
+};
+
+/**
+ * Upload SOS image with 3-tier fallback:
+ * 1. Backend via XHR FormData (primary - most reliable)
+ * 2. Direct Cloudinary via XHR FormData
+ * 3. Backend via base64 JSON (ultimate fallback)
+ */
+export const uploadSOSImageToCloudinary = async (imageUri, userId = 'unknown') => {
+  // Tier 1: Try backend upload via XHR
+  try {
+    console.log('Attempting image upload via backend (XHR)...');
+    const url = await uploadViaBackend(imageUri, 'image', userId);
+    if (url) {
+      console.log('Image uploaded via backend:', url);
+      return url;
+    }
+  } catch (error) {
+    console.warn('Backend XHR image upload failed:', error.message);
+  }
+
+  // Tier 2: Try direct Cloudinary upload via XHR
+  try {
+    console.log('Attempting direct Cloudinary image upload (XHR)...');
+    const result = await uploadToCloudinary(imageUri, 'image', `sos/images/${userId}`);
+    if (result.url) {
+      console.log('Image uploaded directly to Cloudinary:', result.url);
+      return result.url;
+    }
+  } catch (error) {
+    console.warn('Direct Cloudinary image upload failed:', error.message);
+  }
+
+  // Tier 3: Try base64 upload via backend
+  try {
+    console.log('Attempting image upload via backend (base64)...');
+    const url = await uploadViaBackendBase64(imageUri, 'image', userId);
+    if (url) {
+      console.log('Image uploaded via backend base64:', url);
+      return url;
+    }
+  } catch (error) {
+    console.error('All image upload methods failed:', error.message);
+    throw new Error('Failed to upload image after all retry attempts');
+  }
+};
+
+/**
+ * Upload SOS audio with 3-tier fallback
+ */
+export const uploadSOSAudioToCloudinary = async (audioUri, userId = 'unknown') => {
+  // Tier 1: Try backend upload via XHR
+  try {
+    console.log('Attempting audio upload via backend (XHR)...');
+    const url = await uploadViaBackend(audioUri, 'audio', userId);
+    if (url) {
+      console.log('Audio uploaded via backend:', url);
+      return url;
+    }
+  } catch (error) {
+    console.warn('Backend XHR audio upload failed:', error.message);
+  }
+
+  // Tier 2: Try direct Cloudinary upload via XHR
+  try {
+    console.log('Attempting direct Cloudinary audio upload (XHR)...');
+    const result = await uploadToCloudinary(audioUri, 'video', `sos/audio/${userId}`);
+    if (result.url) {
+      console.log('Audio uploaded directly to Cloudinary:', result.url);
+      return result.url;
+    }
+  } catch (error) {
+    console.warn('Direct Cloudinary audio upload failed:', error.message);
+  }
+
+  // Tier 3: Try base64 upload via backend
+  try {
+    console.log('Attempting audio upload via backend (base64)...');
+    const url = await uploadViaBackendBase64(audioUri, 'audio', userId);
+    if (url) {
+      console.log('Audio uploaded via backend base64:', url);
+      return url;
+    }
+  } catch (error) {
+    console.error('All audio upload methods failed:', error.message);
+    throw new Error('Failed to upload audio after all retry attempts');
+  }
 };
 
 /**
@@ -205,7 +304,7 @@ export const uploadAllSOSFiles = async ({ imageUri, audioUri, userId }) => {
     uploads.push(
       uploadSOSImageToCloudinary(imageUri, userId)
         .then(url => { imageUrl = url; })
-        .catch(err => { console.error('Image upload error:', err); })
+        .catch(err => { console.error('Image upload error:', err.message); })
     );
   }
 
@@ -213,7 +312,7 @@ export const uploadAllSOSFiles = async ({ imageUri, audioUri, userId }) => {
     uploads.push(
       uploadSOSAudioToCloudinary(audioUri, userId)
         .then(url => { audioUrl = url; })
-        .catch(err => { console.error('Audio upload error:', err); })
+        .catch(err => { console.error('Audio upload error:', err.message); })
     );
   }
 
