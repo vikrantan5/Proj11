@@ -100,9 +100,9 @@ export default function SOSCameraCapture({ visible, onCapture, onClose }) {
     setIsCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        skipProcessing: false,
-        exif: true,
+        quality: 0.3,
+        skipProcessing: true,
+        exif: false,
       });
 
       console.log('Evidence photo captured:', photo.uri);

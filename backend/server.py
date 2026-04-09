@@ -12,7 +12,8 @@ from datetime import datetime, timezone
 import cloudinary
 import cloudinary.uploader
 import tempfile
-
+import time
+import hashlib
 import base64
 
 ROOT_DIR = Path(__file__).parent
@@ -24,10 +25,14 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # Cloudinary configuration
+CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
+CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
+CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
+
 cloudinary.config(
-    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
-    api_key=os.environ.get('CLOUDINARY_API_KEY'),
-    api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
+    cloud_name=CLOUDINARY_CLOUD_NAME,
+    api_key=CLOUDINARY_API_KEY,
+    api_secret=CLOUDINARY_API_SECRET,
     secure=True
 )
 
@@ -107,6 +112,11 @@ class SOSBase64UploadRequest(BaseModel):
     audio_filename: Optional[str] = "sos_audio.m4a"
 
 
+class SignUploadRequest(BaseModel):
+    folder: str = "sos"
+    resource_type: str = "image"
+
+
 # ============ Status Routes ============
 
 @api_router.get("/")
@@ -131,6 +141,44 @@ async def get_status_checks():
     return status_checks
 
 
+# ============ Cloudinary Sign Upload Route ============
+
+@api_router.post("/sos/sign-upload")
+async def sign_cloudinary_upload(request: SignUploadRequest):
+    """
+    Generate a Cloudinary signed upload signature.
+    This allows the mobile app to do authenticated uploads directly to Cloudinary
+    without exposing the API secret on the client.
+    """
+    try:
+        timestamp = int(time.time())
+        folder = request.folder
+        resource_type = request.resource_type
+
+        # Build params to sign
+        params_to_sign = {
+            "folder": folder,
+            "timestamp": timestamp,
+        }
+
+        # Generate signature using Cloudinary's utility
+        signature = cloudinary.utils.api_sign_request(
+            params_to_sign,
+            CLOUDINARY_API_SECRET
+        )
+
+        return {
+            "signature": signature,
+            "timestamp": timestamp,
+            "api_key": CLOUDINARY_API_KEY,
+            "cloud_name": CLOUDINARY_CLOUD_NAME,
+            "folder": folder,
+        }
+    except Exception as e:
+        logger.error(f"Sign upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to sign upload: {str(e)}")
+
+
 # ============ SOS Routes ============
 
 @api_router.post("/sos/upload", response_model=SOSUploadResponse)
@@ -149,8 +197,9 @@ async def sos_upload(
     try:
         # Upload image to Cloudinary
         if image_file and image_file.filename:
-            logger.info(f"Uploading SOS image for user {user_id}")
+            logger.info(f"Uploading SOS image for user {user_id}, filename: {image_file.filename}, content_type: {image_file.content_type}")
             contents = await image_file.read()
+            logger.info(f"Image file size: {len(contents)} bytes")
 
             with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
                 tmp.write(contents)
@@ -212,6 +261,7 @@ async def sos_upload_base64(request: SOSBase64UploadRequest):
         if request.image_base64:
             logger.info(f"Uploading base64 SOS image for user {request.user_id}")
             image_data = base64.b64decode(request.image_base64)
+            logger.info(f"Decoded image size: {len(image_data)} bytes")
             suffix = '.jpg'
             if request.image_filename and '.' in request.image_filename:
                 suffix = '.' + request.image_filename.rsplit('.', 1)[1]
@@ -334,7 +384,7 @@ async def sos_health():
     return {
         "status": "healthy",
         "service": "SOS Emergency Backend",
-        "cloudinary_configured": bool(os.environ.get('CLOUDINARY_CLOUD_NAME')),
+        "cloudinary_configured": bool(CLOUDINARY_CLOUD_NAME),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 

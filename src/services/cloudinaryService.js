@@ -1,6 +1,5 @@
 
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
 import ENV from '../config/env';
 
 // Cloudinary config
@@ -14,7 +13,7 @@ const BACKEND_URL = ENV.BACKEND_URL || '';
  * XMLHttpRequest-based file upload that works with React Native FormData.
  * This bypasses Expo's custom fetch which doesn't support {uri, type, name} FormData parts.
  */
-const xhrUpload = (url, formData, headers = {}) => {
+const xhrUpload = (url, formData, headers = {}, timeoutMs = 60000) => {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
@@ -45,14 +44,39 @@ const xhrUpload = (url, formData, headers = {}) => {
       reject(new Error('Upload timed out'));
     };
 
-    xhr.timeout = 60000; // 60 second timeout
+    xhr.timeout = timeoutMs;
     xhr.send(formData);
   });
 };
 
 /**
- * Upload a file directly to Cloudinary using XMLHttpRequest (bypasses Expo fetch issue)
- * Uses unsigned upload with the 'sos_emergency' preset
+ * Get a signed upload signature from the backend.
+ * This allows authenticated uploads directly to Cloudinary without exposing API secret.
+ */
+const getSignedUploadParams = async (folder, resourceType) => {
+  try {
+    if (!BACKEND_URL) return null;
+
+    const response = await fetch(`${BACKEND_URL}/api/sos/sign-upload`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ folder, resource_type: resourceType }),
+    });
+
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) {
+    console.warn('Failed to get signed upload params:', error.message);
+    return null;
+  }
+};
+
+/**
+ * Upload a file directly to Cloudinary using XMLHttpRequest with SIGNED upload.
+ * Falls back to unsigned upload if signing fails.
  * @param {string} fileUri - Local file URI
  * @param {string} resourceType - 'image', 'video' (audio uses 'video'), or 'raw'
  * @param {string} folder - Cloudinary folder path
@@ -88,14 +112,29 @@ export const uploadToCloudinary = async (fileUri, resourceType = 'image', folder
       name: fileName,
     });
 
-    formData.append('upload_preset', 'sos_emergency');
-    formData.append('folder', folder);
-    formData.append('api_key', CLOUDINARY_API_KEY);
+    // Try signed upload first (more reliable, no preset needed)
+    const signedParams = await getSignedUploadParams(folder, resourceType);
+
+    if (signedParams) {
+      formData.append('signature', signedParams.signature);
+      formData.append('timestamp', String(signedParams.timestamp));
+      formData.append('api_key', signedParams.api_key);
+      formData.append('folder', folder);
+      console.log(`Using signed Cloudinary upload for ${resourceType}`);
+    } else {
+      // Fallback to unsigned upload with preset
+      formData.append('upload_preset', 'sos_emergency');
+      formData.append('folder', folder);
+      formData.append('api_key', CLOUDINARY_API_KEY);
+      console.log(`Using unsigned Cloudinary upload for ${resourceType}`);
+    }
 
     // Use XMLHttpRequest instead of fetch to avoid Expo's FormData issues
+    // Image uploads get longer timeout (120s) since they're larger
+    const timeout = resourceType === 'image' ? 120000 : 60000;
     const result = await xhrUpload(uploadUrl, formData, {
       'Accept': 'application/json',
-    });
+    }, timeout);
 
     console.log(`Cloudinary ${resourceType} upload success:`, result.secure_url);
 
@@ -146,16 +185,18 @@ const uploadViaBackend = async (fileUri, fileType, userId) => {
   }
 
   // Use XHR instead of fetch to avoid Expo's FormData issue
+  // Images get longer timeout
+  const timeout = fileType === 'image' ? 120000 : 60000;
   const result = await xhrUpload(`${BACKEND_URL}/api/sos/upload`, formData, {
     'Accept': 'application/json',
-  });
+  }, timeout);
 
   return fileType === 'image' ? result.image_url : result.audio_url;
 };
 
 /**
- * Upload file via backend using base64 encoding (ultimate fallback)
- * Avoids all FormData issues by encoding file as base64 string and sending as JSON
+ * Upload file via backend using base64 encoding (most reliable fallback)
+ * Avoids all FormData/XHR binary issues by reading file as base64 via fetch blob
  * @param {string} fileUri - Local file URI
  * @param {string} fileType - 'image' or 'audio'
  * @param {string} userId - User ID
@@ -166,11 +207,8 @@ const uploadViaBackendBase64 = async (fileUri, fileType, userId) => {
     throw new Error('Backend URL not configured');
   }
 
-  // Read file as base64 using expo-file-system
-  // Use string 'base64' directly to avoid FileSystem.EncodingType.Base64 being undefined
-  const base64Data = await FileSystem.readAsStringAsync(fileUri, {
-    encoding: 'base64',
-  });
+  // Read file as base64 using fetch + blob + FileReader (works on all Expo versions)
+  const base64Data = await readFileAsBase64(fileUri);
 
   const fileName = fileUri.split('/').pop() || 'file';
 
@@ -217,15 +255,54 @@ const uploadViaBackendBase64 = async (fileUri, fileType, userId) => {
 };
 
 /**
+ * Read a local file URI as base64 string using fetch + blob + FileReader.
+ * This method works across ALL Expo SDK versions without deprecated APIs.
+ * @param {string} fileUri - Local file URI (file:///...)
+ * @returns {Promise<string>} Base64 encoded string (without data: prefix)
+ */
+const readFileAsBase64 = (fileUri) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // fetch() can read local file:// URIs in React Native
+      const response = await fetch(fileUri);
+      const blob = await response.blob();
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        // Result is: \"data:image/jpeg;base64,/9j/4AAQ...\"
+        // We only need the base64 part after the comma
+        const base64 = reader.result;
+        if (base64 && typeof base64 === 'string') {
+          const commaIndex = base64.indexOf(',');
+          if (commaIndex > -1) {
+            resolve(base64.substring(commaIndex + 1));
+          } else {
+            resolve(base64);
+          }
+        } else {
+          reject(new Error('FileReader returned empty result'));
+        }
+      };
+      reader.onerror = () => {
+        reject(new Error('FileReader error'));
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      reject(new Error(`Failed to read file as base64: ${error.message}`));
+    }
+  });
+};
+
+/**
  * Upload SOS image with 3-tier fallback:
- * 1. Direct Cloudinary via XHR FormData (fastest, no backend needed)
+ * 1. Direct Cloudinary via XHR FormData with SIGNED upload (fastest, most reliable)
  * 2. Backend via XHR FormData (server-side signed upload)
- * 3. Backend via base64 JSON (ultimate fallback)
+ * 3. Backend via base64 JSON (ultimate fallback - uses fetch+blob, no deprecated APIs)
  */
 export const uploadSOSImageToCloudinary = async (imageUri, userId = 'unknown') => {
-  // Tier 1: Try direct Cloudinary upload via XHR (fastest - uses unsigned preset)
+  // Tier 1: Try direct Cloudinary upload via XHR with signed params
   try {
-    console.log('Attempting direct Cloudinary image upload (XHR)...');
+    console.log('Attempting direct Cloudinary image upload (signed XHR)...');
     const result = await uploadToCloudinary(imageUri, 'image', `sos/images/${userId}`);
     if (result.url) {
       console.log('Image uploaded directly to Cloudinary:', result.url);
@@ -247,9 +324,9 @@ export const uploadSOSImageToCloudinary = async (imageUri, userId = 'unknown') =
     console.warn('Backend XHR image upload failed:', error.message);
   }
 
-  // Tier 3: Try base64 upload via backend
+  // Tier 3: Try base64 upload via backend (uses fetch+blob, no deprecated expo-file-system)
   try {
-    console.log('Attempting image upload via backend (base64)...');
+    console.log('Attempting image upload via backend (base64 via fetch+blob)...');
     const url = await uploadViaBackendBase64(imageUri, 'image', userId);
     if (url) {
       console.log('Image uploaded via backend base64:', url);
@@ -265,9 +342,9 @@ export const uploadSOSImageToCloudinary = async (imageUri, userId = 'unknown') =
  * Upload SOS audio with 3-tier fallback
  */
 export const uploadSOSAudioToCloudinary = async (audioUri, userId = 'unknown') => {
-  // Tier 1: Try direct Cloudinary upload via XHR (fastest - uses unsigned preset)
+  // Tier 1: Try direct Cloudinary upload via XHR (fastest - uses signed upload)
   try {
-    console.log('Attempting direct Cloudinary audio upload (XHR)...');
+    console.log('Attempting direct Cloudinary audio upload (signed XHR)...');
     const result = await uploadToCloudinary(audioUri, 'video', `sos/audio/${userId}`);
     if (result.url) {
       console.log('Audio uploaded directly to Cloudinary:', result.url);
@@ -291,7 +368,7 @@ export const uploadSOSAudioToCloudinary = async (audioUri, userId = 'unknown') =
 
   // Tier 3: Try base64 upload via backend
   try {
-    console.log('Attempting audio upload via backend (base64)...');
+    console.log('Attempting audio upload via backend (base64 via fetch+blob)...');
     const url = await uploadViaBackendBase64(audioUri, 'audio', userId);
     if (url) {
       console.log('Audio uploaded via backend base64:', url);
