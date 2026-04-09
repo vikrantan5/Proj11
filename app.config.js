@@ -77,7 +77,7 @@ module.exports = {
     ],
     web: {
       bundler: "metro",
-      favicon: "./assets/images/favicon.png"
+      favicon: "./assets/images/splash-icon.png"
     },
     experiments: {
       typedRoutes: true
