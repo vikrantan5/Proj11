@@ -665,12 +665,12 @@ export default function ProfileScreen() {
               }}
             />
 
-            <SettingItem
+            {/* <SettingItem
               icon={Settings}
               title="Voice Commands"
               subtitle="Configure voice activation settings"
               onPress={handleVoiceCommands}
-            />
+            /> */}
 
             <View
               style={{
@@ -680,12 +680,12 @@ export default function ProfileScreen() {
               }}
             />
 
-            <SettingItem
+            {/* <SettingItem
               icon={Lock}
               title="Privacy & Security"
               subtitle="Control data sharing and privacy"
               onPress={handlePrivacy}
-            />
+            /> */}
           </View>
         </View>
 

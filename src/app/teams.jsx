@@ -32,7 +32,7 @@ const TEAM_MEMBERS = [
     name: 'Nida Samrin',
     role: 'Student Developer',
     bio: 'Passionate about building impactful mobile applications and safety-first solutions. Currently pursuing studies in Computer Science.',
-    image: 'https://ui-avatars.com/api/?name=Nida+Samrin&background=00E5FF&color=0A0E27&size=256&bold=true&font-size=0.4',
+    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=688&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
     social: {
       instagram: 'https://www.instagram.com/',
       linkedin: 'https://www.linkedin.com/',
@@ -44,7 +44,7 @@ const TEAM_MEMBERS = [
     name: 'Prof. Mentor',
     role: 'Teacher & Guide',
     bio: 'Experienced educator guiding students in mobile development, AI safety systems, and real-world project execution.',
-    image: 'https://ui-avatars.com/api/?name=Prof+Mentor&background=9C27FF&color=FFFFFF&size=256&bold=true&font-size=0.4',
+    image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8bWVufGVufDB8fDB8fHww',
     social: {
       instagram: 'https://www.instagram.com/',
       linkedin: 'https://www.linkedin.com/',
