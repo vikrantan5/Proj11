@@ -11,6 +11,11 @@ module.exports = {
     icon: "./assets/images/icon.png",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+     splash: {
+      image: "./assets/images/splash-icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#ffffff"
+    },
     ios: {
       supportsTablet: true,
             infoPlist: {
@@ -61,7 +66,8 @@ module.exports = {
         {
           image: "./assets/images/splash-icon.png",
           imageWidth: 200,
-          resizeMode: "contain"
+            resizeMode: "contain",
+          backgroundColor: "#ffffff"
         }
       ],
       [
